@@ -179,9 +179,12 @@ These are executable: `tests/examples.test.js`.
   (timed, not marked "free"), plans around them, and writes workout events with two pop-up
   reminders. Moving a Stride event in Google moves the session; deleting it counts as skipped.
 * **iPhone Calendar:** upcoming sessions export as an `.ics` file with two alerts per event.
-* **Reminders:** calendar events are titled "Stride time" and carry a funny line in their notes
-  (e.g. "Get your lazy ass on the treadmill, Tal. Lovingly."). While the app is open it also pops
-  up a funny reminder at workout time.
+* **Reminders:** calendar events are titled "Stride time" and carry a funny line in their notes.
+  While the app is open it pops up a funny reminder at workout time. With the optional push
+  service (`push/`, a Cloudflare Worker + Durable Object), the phone gets a funny Web Push
+  notification 10 minutes before and at the start of each workout even when the app is closed.
+  The app sends the service only its push subscription and upcoming workout times; payloads are
+  encrypted per RFC 8291 and authenticated with VAPID (RFC 8292).
 * **Missed sessions:** a planned session that passes without a workout prompts "What happened?";
   the answer is logged as a missed record and never lowers fitness by itself.
 

@@ -3,6 +3,7 @@
 
 import * as store from './storage.js';
 import * as gcal from './google.js';
+import * as push from './push.js';
 import { ICONS } from './icons.js';
 import { decide, commitDecision, recordWorkout } from './engine/engine.js';
 import { applyPermanentChange } from './engine/progression.js';
@@ -31,6 +32,9 @@ let wiz = null;              // runner-profile wizard state
 let checkin = null;          // post-workout form state
 let ticker = null;
 let syncing = false;
+let pushUrl = null;           // push service URL (from push-config.json)
+let pushBusy = false;
+let pushTimer = null;
 let wakeLock = null;
 let audio = null;
 let lastSaveAt = 0;
@@ -703,6 +707,7 @@ function saveCheckin() {
   render();
   if (fresh.length) setTimeout(() => openSheet(sheets.medal(fresh)), 600);
   if (data.schedule.enabled) replan({ silent: true });
+  else pushSync();
   window.scrollTo(0, 0);
   const msgs = {
     easy: 'Saved. That felt comfortable. A couple more like it and things step up a little.',
@@ -868,6 +873,51 @@ function replan({ silent = false } = {}) {
   const msg = describeChanges(changes);
   if (msg && !silent) toast(msg, 5000);
   if (data.schedule.google.connected && gcal.hasValidToken()) syncGoogle(false);
+  pushSync();
+}
+
+// ---------- push reminders
+
+function pushSessions() {
+  if (!data.schedule.enabled) return [];
+  const now = new Date();
+  return data.schedule.sessions.filter((s) => s.status === 'planned' && new Date(s.start) > now)
+    .map(({ id, start, minutes }) => ({ id, start, minutes }));
+}
+
+// Tell the push service about the current plan (debounced; skips if unchanged).
+function pushSync() {
+  if (!data.push?.enabled || !pushUrl) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(async () => {
+    const sessions = pushSessions();
+    const payload = JSON.stringify(sessions);
+    if (payload === data.push.lastPayload) return;
+    try {
+      const r = await push.update(pushUrl, sessions);
+      if (r === null) { data.push.enabled = false; persist(); if (view === 'plan') render(); return; }
+      data.push.lastPayload = payload;
+      persist();
+    } catch { /* offline: try again on the next change or launch */ }
+  }, 1200);
+}
+
+function pushCard() {
+  const p = data.push ?? {};
+  let body;
+  if (!pushUrl) {
+    body = `<p class="small muted">Not set up yet. It needs a free one-time setup (about 15 minutes): see <b>push/README.md</b> in the Stride repo on GitHub. Until then you get calendar alerts, and funny pop-ups while Stride is open.</p>`;
+  } else if (!push.supported() || (/iPhone|iPad|iPod/.test(navigator.userAgent) && !isStandalone())) {
+    body = `<p class="small muted">Install Stride on your home screen first (Share → Add to Home Screen), then open it from there to turn these on. Needs iOS 16.4 or newer.</p>`;
+  } else if (p.enabled) {
+    body = `<p class="small">${ICONS.check} On. A funny reminder arrives 10 minutes before and at the start of every planned workout, even when Stride is closed.</p>
+      <p class="small muted" style="margin:6px 0 12px">If you change your plan in Google Calendar, open Stride once so the reminders follow.</p>
+      <div class="row"><button class="btn primary" style="flex:1" data-act="push-test">${ICONS.bell} Send a test</button><button class="btn" data-act="push-off" ${pushBusy ? 'disabled' : ''}>Turn off</button></div>`;
+  } else {
+    body = `<p class="small muted" style="margin-bottom:12px">Get a funny nudge 10 minutes before and at the start of each workout, even when Stride is closed.</p>
+      <button class="btn primary block" data-act="push-on" ${pushBusy ? 'disabled' : ''}>${ICONS.bell} ${pushBusy ? 'Turning on…' : 'Turn on push reminders'}</button>`;
+  }
+  return `<section class="card"><h3>Funny push reminders</h3>${body}</section>`;
 }
 
 async function syncGoogle(interactive) {
@@ -919,6 +969,7 @@ async function syncGoogle(interactive) {
     data.schedule.sessions = sessions;
     Object.assign(g, { connected: true, lastSync: nowIso(), error: null });
     persist();
+    pushSync();
     const msg = describeChanges(plan.changes);
     toast(msg ?? (interactive ? `Synced with Google Calendar. ${plural(sessions.filter((x) => x.status === 'planned' && new Date(x.start) >= now).length, 'workout')} scheduled.` : ''), msg ? 5000 : 2500);
   } catch (e) {
@@ -992,9 +1043,8 @@ function renderPlan() {
     <div style="margin-top:8px">${busyList}</div>
   </section>
 
+  ${pushCard()}
   <section class="card soft">
-    <div class="switch-row"><div><b>In-app reminders</b><p class="small muted">While Stride is open, it pops up a reminder at workout time. For reminders when the app is closed, use the calendar alerts above.</p></div>
-    <button class="switch" role="switch" aria-checked="${typeof Notification !== 'undefined' && Notification.permission === 'granted'}" data-act="notify"></button></div>
     <button class="link" data-act="sched-off">Turn off scheduling</button>
   </section>`;
 }
@@ -1253,7 +1303,7 @@ const actions = {
         toast('Logged. No catch-up needed.');
       }
     }
-    persist(); render();
+    persist(); render(); pushSync();
   },
   // workout
   start() { startWorkout(); },
@@ -1305,7 +1355,7 @@ const actions = {
   },
   // plan
   'sched-on'() { data.schedule.enabled = true; persist(); replan({ silent: true }); render(); },
-  'sched-off'() { data.schedule.enabled = false; persist(); render(); toast('Scheduling is off. Events already in your calendars stay there.'); },
+  'sched-off'() { data.schedule.enabled = false; persist(); render(); pushSync(); toast('Scheduling is off. Events already in your calendars stay there.'); },
   'plan-day'(arg) {
     const n = Number(arg);
     const days = data.schedule.prefs.days;
@@ -1318,6 +1368,7 @@ const actions = {
     if (s) { s.start = iso; s.moved = true; }
     persist(); closeSheet(); render();
     toast(`Moved to ${fmtWhen(iso)}.`);
+    pushSync();
     if (data.schedule.google.connected && gcal.hasValidToken()) syncGoogle(false);
   },
   'skip-session'(arg) {
@@ -1327,6 +1378,7 @@ const actions = {
     data.schedule.dismissed = [...data.schedule.dismissed, id].slice(-200);
     persist(); closeSheet(); render();
     toast('Skipped. No catch-up, no guilt.');
+    pushSync();
     if (data.schedule.google.connected && gcal.hasValidToken()) syncGoogle(false);
   },
   'busy-day'(arg, el) { el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); },
@@ -1364,12 +1416,30 @@ const actions = {
     if (!w) await shareOrDownload(file);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   },
-  async notify() {
-    if (typeof Notification === 'undefined') return toast('Notifications need Stride installed on your home screen (iOS 16.4+).', 4500);
-    if (Notification.permission === 'granted') return toast('To turn reminders off, use iPhone Settings → Notifications → Stride.', 4500);
-    const res = await Notification.requestPermission();
-    render();
-    toast(res === 'granted' ? 'Reminders on while Stride is open.' : 'Notifications were not allowed.');
+  async 'push-on'() {
+    if (!pushUrl) return;
+    pushBusy = true; render();
+    try {
+      const r = await push.enable(pushUrl, pushSessions());
+      data.push = { ...data.push, enabled: true, lastPayload: JSON.stringify(pushSessions()) };
+      persist();
+      toast(r.alerts ? `Push reminders on. ${plural(r.alerts / 2, 'workout')} covered.` : 'Push reminders on. Plan some workouts to get reminders.', 4500);
+    } catch (e) { toast(e.message, 6000); }
+    pushBusy = false; render();
+  },
+  async 'push-off'() {
+    pushBusy = true; render();
+    try { await push.disable(pushUrl); } catch { /* ignore */ }
+    data.push = { ...data.push, enabled: false, lastPayload: null };
+    persist();
+    pushBusy = false; render();
+    toast('Push reminders off.');
+  },
+  async 'push-test'() {
+    try {
+      await push.test(pushUrl);
+      toast('Test sent. It should arrive in a few seconds (try locking your phone).', 5000);
+    } catch (e) { toast(e.message, 5000); }
   },
 };
 
@@ -1415,12 +1485,6 @@ async function checkReminder() {
   const line = funnyLine(`${next.id}-go`, { name: data.profile.name, minutes: next.minutes });
   toast(line, 8000);
   speak(line);
-  try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      const reg = await navigator.serviceWorker?.getRegistration();
-      if (reg) reg.showNotification('Stride: time to move!', { body: line, icon: 'icons/icon-192.png', tag: key });
-    }
-  } catch { /* ignore */ }
   if (view === 'today') render();
 }
 setInterval(checkReminder, 20000);
@@ -1500,3 +1564,8 @@ if (data.activeSession) {
   replan({ silent: false });
   checkReminder();
 }
+push.serviceUrl().then((url) => {
+  pushUrl = url;
+  if (view === 'plan') render();
+  pushSync();
+});

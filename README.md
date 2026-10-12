@@ -26,6 +26,11 @@ GitHub Pages on a **private** repository needs a paid GitHub plan (e.g. GitHub P
 plan, make the repository public first (Settings → General → Danger Zone → Change visibility).
 The code contains no personal data: your workout history only ever lives on your phone.
 
+## Funny push reminders (optional)
+
+Reminders that arrive even when the app is closed need a tiny free push service. Setup takes about
+15 minutes: see [`push/README.md`](push/README.md).
+
 ## Development
 
 Serve `docs/` with any static server (`python3 -m http.server -d docs`) and run the engine tests

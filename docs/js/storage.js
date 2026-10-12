@@ -14,6 +14,7 @@ export function emptyData() {
     state: defaultState(),
     history: [],          // workout and missed records
     schedule: defaultSchedule(),
+    push: { enabled: false, lastPayload: null },
     activeSession: null,  // in-progress workout, so a reload can resume it
   };
 }
@@ -50,6 +51,7 @@ export function migrate(data) {
       prefs: { ...base.schedule.prefs, ...(data.schedule?.prefs ?? {}) },
       google: { ...base.schedule.google, ...(data.schedule?.google ?? {}) },
     },
+    push: { ...base.push, ...(data.push ?? {}) },
     schemaVersion: SCHEMA_VERSION,
   };
 }

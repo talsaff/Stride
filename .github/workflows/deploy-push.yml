@@ -1,0 +1,79 @@
+name: Deploy push service
+
+# Deploys the Stride push service (push/) to your Cloudflare account and
+# writes its address into docs/push-config.json so the app can find it.
+# Needs two repository secrets: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
+# (see push/README.md).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['push/**', 'docs/js/engine/schedule.js', '.github/workflows/deploy-push.yml']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-push
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check secrets
+        id: secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "::warning::Push service not deployed: add the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets (see push/README.md), then run this workflow again."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Test
+        if: steps.secrets.outputs.ready == 'true'
+        run: npm test
+        working-directory: push
+
+      - name: Deploy to Cloudflare
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: push
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ORIGIN="https://$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]').github.io"
+          npx --yes wrangler@4.149.0 deploy \
+            --var "ALLOWED_ORIGINS:$ORIGIN" \
+            --var "VAPID_SUBJECT:https://github.com/${{ github.repository }}" 2>&1 | tee deploy.log
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          if [ -z "$URL" ]; then
+            echo "::error::Deployed, but could not find the workers.dev address in the output. Open Cloudflare → Workers & Pages once so your account gets a workers.dev subdomain, then re-run."
+            exit 1
+          fi
+          echo "URL=$URL" >> "$GITHUB_ENV"
+          echo "### Push service live at $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Point the app at the push service
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          printf '{ "url": "%s" }\n' "$URL" > docs/push-config.json
+          if git diff --quiet docs/push-config.json; then
+            echo "Push config already up to date."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/push-config.json
+            git commit -m "Point Stride at its push service"
+            git push
+          fi
