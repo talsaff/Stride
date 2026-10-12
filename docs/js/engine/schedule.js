@@ -227,13 +227,12 @@ export function funnyLine(seed, { name = '', minutes = 20 } = {}) {
     .replace(/\s+([.!?])/g, '$1');
 }
 
-// Calendar alerts show the event title, so the joke goes in the title.
-export function eventTitle(session, profile) {
-  return `🏃 ${funnyLine(session.id, { name: profile.name, minutes: session.minutes })}`;
+export function eventTitle(session) {
+  return `🏃 Stride workout · ${session.minutes} min`;
 }
 
-export function eventDescription(session) {
-  return `Stride: ${session.minutes} min treadmill workout.\nOpen Stride when you are on the treadmill. Your plan for today is waiting.`;
+export function eventDescription(session, profile = {}) {
+  return `${funnyLine(session.id, { name: profile.name, minutes: session.minutes })}\n\nOpen Stride when you are on the treadmill. Your plan for today is waiting.`;
 }
 
 // ---------------------------------------------------------------- iCalendar
@@ -247,7 +246,6 @@ export function toICS(sessions, profile, now) {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Stride//Treadmill Coach//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
   for (const s of sessions) {
     if (s.status !== 'planned') continue;
-    const later = funnyLine(`${s.id}-go`, { name: profile.name, minutes: s.minutes });
     lines.push(
       'BEGIN:VEVENT',
       `UID:${s.id}@stride.app`,
@@ -256,8 +254,8 @@ export function toICS(sessions, profile, now) {
       `DTEND:${icsDate(sessionEnd(s))}`,
       `SUMMARY:${icsEsc(eventTitle(s, profile))}`,
       `DESCRIPTION:${icsEsc(eventDescription(s, profile))}`,
-      'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:-PT10M', `DESCRIPTION:${icsEsc(eventTitle(s, profile))}`, 'END:VALARM',
-      'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M', `DESCRIPTION:${icsEsc(later)}`, 'END:VALARM',
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:-PT10M', `DESCRIPTION:${icsEsc(eventTitle(s))}`, 'END:VALARM',
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M', `DESCRIPTION:${icsEsc(eventTitle(s))}`, 'END:VALARM',
       'END:VEVENT',
     );
   }

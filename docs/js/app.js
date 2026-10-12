@@ -880,7 +880,9 @@ async function syncGoogle(interactive) {
     const now = new Date();
     const from = new Date(now.getTime() - 864e5).toISOString();
     const to = new Date(now.getTime() + 15 * 864e5).toISOString();
-    const { busy, strideEvents } = await gcal.readCalendar(token, from, to);
+    g.calendarId = await gcal.ensureCalendar(token, g.calendarId);
+    const calId = g.calendarId;
+    const { busy, strideEvents } = await gcal.readCalendar(token, calId, from, to);
 
     // Respect changes made in Google Calendar: moved events move the session,
     // deleted events count as skipped (no catch-up).
@@ -891,27 +893,27 @@ async function syncGoogle(interactive) {
       const evStart = new Date(ev.start.dateTime).toISOString();
       return evStart !== new Date(s.start).toISOString() ? { ...s, start: evStart, googleEventId: ev.id, moved: true } : { ...s, googleEventId: ev.id };
     });
-    data.schedule.externalBusy = busy.map(({ start, end }) => ({ start, end }));
+    data.schedule.externalBusy = busy;
     const plan = planSchedule({ prefs: data.schedule.prefs, busy: data.schedule.busy, external: data.schedule.externalBusy, sessions, now: now.toISOString(), minutes: plannedMinutes(), perWeek: data.profile.workoutsPerWeek });
     sessions = plan.sessions;
 
     const keep = new Set();
     for (const s of sessions) {
       if (s.status !== 'planned' || new Date(s.start) < now) continue;
-      const body = gcal.eventBody(s, { title: eventTitle(s, data.profile), description: eventDescription(s) });
+      const body = gcal.eventBody(s, { title: eventTitle(s), description: eventDescription(s, data.profile) });
       const ev = strideEvents.get(s.id);
       if (ev) {
         const same = new Date(ev.start.dateTime).getTime() === new Date(s.start).getTime() && new Date(ev.end.dateTime).getTime() === sessionEnd(s).getTime();
-        if (!same) await gcal.patchEvent(token, ev.id, body);
+        if (!same) await gcal.patchEvent(token, calId, ev.id, body);
         s.googleEventId = ev.id;
       } else {
-        const created = await gcal.insertEvent(token, body);
+        const created = await gcal.insertEvent(token, calId, body);
         s.googleEventId = created.id;
       }
       keep.add(s.id);
     }
     for (const [sid, ev] of strideEvents) {
-      if (!keep.has(sid) && new Date(ev.start.dateTime) > now && !sessions.some((x) => x.id === sid && x.status !== 'planned')) await gcal.deleteEvent(token, ev.id);
+      if (!keep.has(sid) && new Date(ev.start.dateTime) > now && !sessions.some((x) => x.id === sid && x.status !== 'planned')) await gcal.deleteEvent(token, calId, ev.id);
     }
     data.schedule.sessions = sessions;
     Object.assign(g, { connected: true, lastSync: nowIso(), error: null });
@@ -935,7 +937,7 @@ function renderPlan() {
   const now = new Date();
   if (!sch.enabled) {
     return `<header class="topbar"><div><div class="eyebrow">Your week</div><h1 class="title">Plan</h1></div></header>
-      <section class="card"><h2>Schedule your workouts</h2><p class="muted" style="margin:8px 0 14px">Pick your days and times. Stride books workouts into free slots, moves them when something clashes, and reminds you with a little attitude.</p>
+      <section class="card"><h2>Schedule your workouts</h2><p class="muted" style="margin:8px 0 14px">Pick your days and times. Stride books workouts into free slots, moves them when something clashes, and reminds you when it's time.</p>
       <button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`;
   }
   const upcoming = sch.sessions.filter((s) => sessionEnd(s) > now && s.status === 'planned');
@@ -959,10 +961,10 @@ function renderPlan() {
   <section class="card">
     <h3>Google Calendar</h3>
     ${g.connected ? `<p class="small">${ICONS.check} Connected${g.lastSync ? ` · last sync ${esc(fmtWhen(g.lastSync))}` : ''}</p>
-      <p class="small muted" style="margin:6px 0 12px">Workouts are added to your Google Calendar with funny reminders. Busy events there are avoided automatically, and if you move a workout in Google, Stride follows.</p>
+      <p class="small muted" style="margin:6px 0 12px">Workouts go into a separate <b>Stride workouts</b> calendar with reminders. Stride only sees when you're busy, never what your events are. If you move a workout in Google, Stride follows.</p>
       ${g.error ? `<p class="small" style="color:var(--danger)">${esc(g.error)}</p>` : ''}
       <div class="row"><button class="btn primary" style="flex:1" data-act="gsync" ${syncing ? 'disabled' : ''}>${ICONS.refresh} ${syncing ? 'Syncing…' : 'Sync now'}</button><button class="btn" data-act="gdisconnect">Disconnect</button></div>`
-    : `<p class="small muted" style="margin-bottom:10px">Full auto mode: Stride reads when you're busy, books workouts into free slots, moves them when plans change, and adds them to Google Calendar with reminders.</p>
+    : `<p class="small muted" style="margin-bottom:10px">Full auto mode: Stride checks when you're busy (times only, never event details), books workouts into free slots, moves them when plans change, and puts them in its own <b>Stride workouts</b> calendar with reminders. It can't read or change your other events.</p>
       <label class="q" style="display:block;margin-bottom:10px"><span class="q-label small">Your Google OAuth Client ID</span>
         <input type="text" id="g-client" value="${esc(g.clientId)}" placeholder="xxxx.apps.googleusercontent.com" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
       ${g.error ? `<p class="small" style="color:var(--danger);margin-bottom:8px">${esc(g.error)}</p>` : ''}
@@ -972,7 +974,7 @@ function renderPlan() {
 
   <section class="card">
     <h3>iPhone Calendar</h3>
-    <p class="small muted" style="margin-bottom:12px">Adds your upcoming workouts to the iPhone Calendar with funny alerts 10 minutes before and at start time. After you change the plan, add them again; open the new events and remove old ones if you see doubles.</p>
+    <p class="small muted" style="margin-bottom:12px">Adds your upcoming workouts to the iPhone Calendar with alerts 10 minutes before and at start time. After you change the plan, add them again; open the new events and remove old ones if you see doubles.</p>
     <button class="btn block" data-act="ics">${ICONS.calendar} Add to iPhone Calendar</button>
   </section>
 
@@ -1119,11 +1121,11 @@ const sheets = {
         <li>Open <b>console.cloud.google.com</b> and create a project (name it “Stride”).</li>
         <li>Go to <b>APIs &amp; Services → Library</b>, search <b>Google Calendar API</b> and click <b>Enable</b>.</li>
         <li>Go to <b>Google Auth Platform</b> (or <b>OAuth consent screen</b>), click <b>Get started</b>: app name Stride, your email, audience <b>External</b>.</li>
-        <li>Under <b>Audience → Test users</b>, add your own Google address.</li>
+        <li>Under <b>Audience → Test users</b>, add your own Google address. Leave the app in <b>Testing</b>, so nobody else can use your Client ID.</li>
         <li>Go to <b>Clients</b> (or <b>Credentials</b>) → <b>Create client</b> → type <b>Web application</b>. Under <b>Authorized JavaScript origins</b> add <b>${origin}</b>. Save.</li>
         <li>Copy the <b>Client ID</b> (ends in .apps.googleusercontent.com), paste it here and tap Connect.</li>
       </ol>
-      <p class="small muted">Google may say the app is unverified. That's expected for your own private app: tap <b>Continue</b>. Sign-in lasts about an hour, after which Sync asks again.</p>
+      <p class="small muted">Google may say the app is unverified. That's expected for your own private app (only you, as a test user, can sign in): tap <b>Continue</b>. Stride asks for two permissions: <b>see your free/busy times</b> and <b>manage the calendars it creates</b>. Sign-in lasts about an hour, after which Sync asks again. Revoke access any time at myaccount.google.com/permissions.</p>
       <div class="sheet-actions"><button class="btn primary block" data-act="close">Got it</button></div>`;
   },
 };
@@ -1346,10 +1348,10 @@ const actions = {
   gsync() { syncGoogle(true); },
   gdisconnect() {
     gcal.forgetToken();
-    Object.assign(data.schedule.google, { connected: false, error: null });
+    Object.assign(data.schedule.google, { connected: false, error: null, calendarId: null });
     data.schedule.sessions = data.schedule.sessions.map(({ googleEventId, ...s }) => s);
     persist(); render();
-    toast('Disconnected. Events already in Google Calendar stay there.');
+    toast('Disconnected. To remove the workouts, delete the "Stride workouts" calendar in Google Calendar.');
   },
   async ics() {
     const upcoming = data.schedule.sessions.filter((s) => s.status === 'planned' && sessionEnd(s) > new Date());
