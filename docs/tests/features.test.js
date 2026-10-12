@@ -180,12 +180,12 @@ describe('scheduling', () => {
     assert.equal(nextSession(markDone([s], NOW), NOW), null);
   });
 
-  test('calendar export has a plain title, the joke in the notes, and two alerts per session', () => {
+  test('calendar export is titled "Stride time" with the joke in the notes and two alerts', () => {
     const { sessions } = planSchedule({ prefs, now: NOW, minutes: 20, perWeek: 2 });
     const ics = toICS(sessions, { name: 'Sam' }, NOW);
     assert.equal((ics.match(/BEGIN:VEVENT/g) || []).length, sessions.length);
     assert.equal((ics.match(/BEGIN:VALARM/g) || []).length, sessions.length * 2);
-    assert.match(ics, /SUMMARY:🏃 Stride workout · 20 min/);
+    assert.equal((ics.match(/SUMMARY:Stride time\r\n/g) || []).length, sessions.length);
     for (const line of FUNNY) assert.ok(!ics.includes(`SUMMARY:${line.slice(0, 15)}`));
     assert.ok(ics.includes('\r\n'));
   });
@@ -197,8 +197,8 @@ describe('scheduling', () => {
       assert.ok(!/\{|\}/.test(withName) && !/\{|\}/.test(noName));
       assert.ok(!/ ,|,\s*[.!]|^Hey,? ?$/.test(noName), noName);
     }
-    assert.ok(FUNNY.length >= 20);
-    assert.equal(eventTitle({ id: 'a', minutes: 20 }), '🏃 Stride workout · 20 min');
+    assert.equal(FUNNY.length, 18);
+    assert.equal(eventTitle({ id: 'a', minutes: 20 }), 'Stride time');
   });
 });
 

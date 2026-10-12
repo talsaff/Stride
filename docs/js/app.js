@@ -903,7 +903,8 @@ async function syncGoogle(interactive) {
       const body = gcal.eventBody(s, { title: eventTitle(s), description: eventDescription(s, data.profile) });
       const ev = strideEvents.get(s.id);
       if (ev) {
-        const same = new Date(ev.start.dateTime).getTime() === new Date(s.start).getTime() && new Date(ev.end.dateTime).getTime() === sessionEnd(s).getTime();
+        const same = new Date(ev.start.dateTime).getTime() === new Date(s.start).getTime() && new Date(ev.end.dateTime).getTime() === sessionEnd(s).getTime()
+          && ev.summary === body.summary && (ev.description ?? '') === body.description;
         if (!same) await gcal.patchEvent(token, calId, ev.id, body);
         s.googleEventId = ev.id;
       } else {

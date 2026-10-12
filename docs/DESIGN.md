@@ -179,8 +179,9 @@ These are executable: `tests/examples.test.js`.
   (timed, not marked "free"), plans around them, and writes workout events with two pop-up
   reminders. Moving a Stride event in Google moves the session; deleting it counts as skipped.
 * **iPhone Calendar:** upcoming sessions export as an `.ics` file with two alerts per event.
-* **Reminders:** calendar alerts show the event title, so the title is a funny line ("Get your lazy
-  ass on the treadmill, Tal"). While the app is open it also shows an in-app reminder.
+* **Reminders:** calendar events are titled "Stride time" and carry a funny line in their notes
+  (e.g. "Get your lazy ass on the treadmill, Tal. Lovingly."). While the app is open it also pops
+  up a funny reminder at workout time.
 * **Missed sessions:** a planned session that passes without a workout prompts "What happened?";
   the answer is logged as a missed record and never lowers fitness by itself.
 

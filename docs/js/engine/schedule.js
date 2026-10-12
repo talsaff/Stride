@@ -189,17 +189,11 @@ export const FUNNY = [
   'Hey {name}, the couch called. It says you two need some space. 🛋️',
   'Get your lazy ass on the treadmill, {name}. Lovingly. 🍑',
   'Your treadmill misses you. It is crying little belt tears.',
-  'Netflix will wait. Your legs will not. 🏃',
   '{min} minutes. You have scrolled longer than that on TikTok.',
   'Plot twist: you actually work out today.',
   'Your treadmill is not a clothes rack. Prove it.',
-  'Snacks are earned, {name}. Go earn them. 🍪',
-  'Beep beep! Treadmill taxi has arrived. 🚕',
-  'You vs. the couch. Round 1. FIGHT! 🥊',
   'This is your sign. Literally. Get moving.',
-  'Legs: on. Excuses: off. Let us go, {name}!',
   'Fun fact: workouts do not do themselves. Sadly.',
-  'Sweat is just your fat crying. Make it cry. 😭',
   'Your future self says thanks in advance. Do not let them down.',
   'Treadmill o\'clock. No excuses, only shoelaces. 👟',
   'The only bad workout is the one your lazy butt skips.',
@@ -228,7 +222,7 @@ export function funnyLine(seed, { name = '', minutes = 20 } = {}) {
 }
 
 export function eventTitle(session) {
-  return `🏃 Stride workout · ${session.minutes} min`;
+  return 'Stride time';
 }
 
 export function eventDescription(session, profile = {}) {
