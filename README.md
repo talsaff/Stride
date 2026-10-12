@@ -9,7 +9,7 @@ JavaScript modules, with no build step and no dependencies.
 
 ## Install on your iPhone
 
-1. Open **https://talsaff.github.io/stride/** in **Safari** on your iPhone
+1. Open **https://talsaff.github.io/Stride/** in **Safari** on your iPhone
    (see "Hosting" below if the link isn't live yet).
 2. Tap **Share**, then **Add to Home Screen**, then **Add**.
 3. Open **Stride** from your home screen. It runs full screen, works offline, and keeps all
