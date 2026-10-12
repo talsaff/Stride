@@ -1,8 +1,9 @@
 # Stride: adaptive treadmill coach (iPhone app)
 
-A gentle, adaptive treadmill walking coach. It plans each walk from how your recent walks felt,
-your energy and recovery today, and how long it has been since your last walk. Missing a week
-never erases progress, and running is never required.
+An adaptive treadmill coach. A runner profile (age, body, fitness, walk/run preference, goal)
+shapes the plan, and every workout adapts to how the last ones felt and your energy today.
+Workouts are scheduled around your calendar (Google Calendar sync or iPhone Calendar export) with
+reminders that roast you a little, and you collect medals for workouts, kilometres and streaks.
 
 The app lives in [`docs/`](docs/) as an installable web app (PWA): plain HTML, CSS and
 JavaScript modules, with no build step and no dependencies.

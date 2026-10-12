@@ -68,7 +68,7 @@ export function evaluateProgression({ state, history, safety, profile }) {
       return { action: 'maintain', from: base, to: base, afterHard: false, reason: 'You are at the top of the program. Keep enjoying it!' };
     }
     if (base + 1 > cap) {
-      return { action: 'maintain', from: base, to: base, afterHard: false, reason: 'You are ready for more, but the next level needs medical clearance first (see Settings).' };
+      return { action: 'maintain', from: base, to: base, afterHard: false, reason: 'You are at the top of your program. Switch to running in your profile if you want more.' };
     }
     const to = base + 1;
     return {
@@ -112,7 +112,7 @@ export function applyPermanentChange({ state, profile, targetLevel, assessment, 
       return { accepted: false, state, message: 'Your last workout felt harder than intended. Let us see how the next one goes first.' };
     }
     if (targetLevel > levelOfStage(maxStageAllowed(profile))) {
-      return { accepted: false, state, message: 'Levels 4 and 5 need you to confirm medical clearance in Settings first.' };
+      return { accepted: false, state, message: 'That level includes running. Change your preference to running in your profile first.' };
     }
     to = firstStageOfLevel(targetLevel);
   }

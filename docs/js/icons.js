@@ -23,4 +23,11 @@ export const ICONS = {
   calendar: s('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
   shield: s('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
   chev: s('<path d="M9 6l6 6-6 6"/>'),
+  medal: s('<circle cx="12" cy="15" r="6"/><path d="M8.5 10.5L5 3h5l2 4 2-4h5l-3.5 7.5"/><path d="M12 13v4"/>'),
+  user: s('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>'),
+  plus: s('<path d="M12 5v14M5 12h14"/>'),
+  x: s('<path d="M6 6l12 12M18 6L6 18"/>'),
+  refresh: s('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
+  bell: s('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/>'),
+  run: s('<circle cx="15" cy="4" r="2"/><path d="M5 21l4-6 3 2 1 4"/><path d="M8 11l3-4 4 1 2 4h3"/><path d="M11 7l-1 5 3 3"/>'),
 };

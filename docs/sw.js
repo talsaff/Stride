@@ -1,12 +1,13 @@
 // Offline support: cache the app shell, serve it cache-first, refresh in the
 // background. Bump VERSION whenever app files change.
-const VERSION = 'stride-v1';
+const VERSION = 'stride-v2';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/icons.js', 'js/storage.js',
+  'js/app.js', 'js/icons.js', 'js/storage.js', 'js/google.js',
   'js/engine/config.js', 'js/engine/schema.js', 'js/engine/history.js', 'js/engine/feedback.js',
   'js/engine/readiness.js', 'js/engine/safety.js', 'js/engine/generator.js', 'js/engine/progression.js',
-  'js/engine/engine.js', 'js/engine/personalization.js',
+  'js/engine/engine.js', 'js/engine/personalization.js', 'js/engine/profile.js',
+  'js/engine/medals.js', 'js/engine/schedule.js',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

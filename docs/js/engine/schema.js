@@ -40,13 +40,15 @@ export const TEMP_ADJUSTMENTS = ['none', 'easier', 'harder'];
 export function defaultProfile() {
   return {
     name: '',
-    age: 19,
-    heightCm: 163,
-    weightKg: 82,
-    fitness: 'beginner',
+    age: null,
+    gender: null,                  // female | male | other | na
+    heightCm: null,
+    weightKg: null,
+    fitness: null,                 // low | some | regular | fit
+    preference: null,              // walk | mix | run
+    goal: null,                    // habit | weight | endurance | run5k
     workoutsPerWeek: 2,
     defaultMinutes: null,          // null = use the program's natural length
-    medicalClearance: false,       // has a clinician cleared brisker exercise?
     autoEasierOnLowEnergy: true,
     voiceCues: true,
   };
@@ -79,6 +81,7 @@ export function makeWorkoutRecord(fields) {
     date: fields.date,                                   // ISO timestamp of start
     planned_duration: fields.planned_duration,           // minutes
     actual_duration: fields.actual_duration,             // minutes (1 decimal)
+    distance_km: fields.distance_km ?? null,
     planned_intervals: fields.planned_intervals,         // [{type, minutes, speed}]
     completed_intervals: fields.completed_intervals,     // count of segments finished
     planned_work_intervals: fields.planned_work_intervals ?? 0,

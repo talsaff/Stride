@@ -23,6 +23,10 @@
 | PersistenceService | `js/storage.js` |
 | UI | `js/app.js`, `index.html`, `styles.css` |
 | Heuristic configuration | `js/engine/config.js` |
+| Runner profile → plan | `js/engine/profile.js` |
+| Medals | `js/engine/medals.js` |
+| Scheduler, funny reminders, .ics export | `js/engine/schedule.js` |
+| Google Calendar connector | `js/google.js` |
 | Future personalization (observes only) | `js/engine/personalization.js` |
 
 Everything under `js/engine/` is pure and deterministic: no clock, storage or randomness inside.
@@ -63,32 +67,28 @@ Missed sessions are stored separately and are never by themselves a fitness sign
 The plan is stored with every workout (`planned_intervals`) next to what was actually done
 (`actual_speed_by_interval`), so planned and actual workload can be compared.
 
+## Runner profile
+
+Built in a wizard on first launch (name, age, gender, height, weight, fitness, walk/mix/run preference,
+goal, weekly schedule) and editable any time from Settings → Runner profile. It changes the plan in
+`profile.js`:
+
+* **Starting level** from fitness × preference, one step gentler from age 45, two more from 60, and
+  one or two gentler for BMI ≥ 30 / ≥ 35.
+* **Speed factor** (0.85–1.12) on every segment: taller → faster, older → gradually slower, higher
+  BMI → slower, fitter → slightly faster. Gender is stored but not used for speeds, since height,
+  weight and age already capture what matters for treadmill pace.
+* **How far the program goes:** walking only (up to stage 15), mix (up to stage 21: run/walk), or
+  running (up to stage 24: continuous running). The "Run 5 km" goal switches on running.
+* **Goal tweak:** weight loss adds 5 easy minutes per workout; habit caps sessions at 25 min.
+
 ## Levels and the progression ladder
 
-Five levels, each with explicit limits (duration, comfortable speed, brisk speed, interval length,
-interval count, target exertion). See `LEVELS` in `config.js`. Inside them is a 15-stage ladder
-(3 per level). **Adjacent stages differ in exactly one workload variable** (a unit test enforces this):
-
-| Stage | Level | Workout (after 4 min warm-up at 2.7, before 3 min cool-down at 2.6) | Total | Changed |
-|---|---|---|---|---|
-| 1 | 1 | 6 min steady @ 3.0 | 13 | start |
-| 2 | 1 | 8 min steady @ 3.0 | 15 | duration |
-| 3 | 1 | 8 min steady @ 3.2 | 15 | speed |
-| 4 | 2 | 2 × (3 easy @ 3.2 + 1 brisk @ 3.5) | 15 | pace changes |
-| 5 | 2 | 3 × (3 + 1) brisk 3.5 | 19 | intervals |
-| 6 | 2 | 3 × (3 + 1) brisk 3.6 | 19 | speed |
-| 7 | 3 | 3 × (2 + 2) brisk 3.6 | 19 | interval length |
-| 8 | 3 | 3 × (2 + 2) brisk 3.8 | 19 | speed |
-| 9 | 3 | 4 × (2 + 2) brisk 3.8 | 23 | intervals |
-| 10 | 4 | 4 × (2 + 3) brisk 3.8 | 27 | interval length |
-| 11 | 4 | 4 × (2 + 3) brisk 3.9 | 27 | speed |
-| 12 | 4 | 4 × (2 + 3) brisk 4.0 | 27 | speed |
-| 13 | 5 | 4 × (2 + 3) brisk 4.2 | 27 | speed |
-| 14 | 5 | 4 × (2 + 4) brisk 4.2 | 31 | interval length |
-| 15 | 5 | 4 × (2 + 4) brisk 4.4 | 31 | speed |
-
-All speeds are walking speeds (max 4.5 km/h). Target exertion never exceeds 6/10. Levels 4-5 require
-the user to confirm medical clearance.
+Eight levels, each with explicit limits (duration, speeds, interval count, target effort), and a
+24-stage ladder. Levels 1-5 are walking (from 13 min steady walking to 31 min power-walking
+intervals at 4.4 km/h); levels 6-8 add jogs (5 × 1 min at 6.5 km/h) and build to 2 × 13 min runs
+at 7.5 km/h (all before the speed factor). Adjacent stages differ in one thing: duration,
+interval structure, or one speed; a unit test enforces this. Target effort never exceeds 7/10.
 
 ## Decision algorithm (`decide()` in `engine.js`)
 
@@ -105,7 +105,7 @@ safety     = SafetyGuard(assessment, profile)
           last 2 non-neutral workouts 'hard'          → decrease baseline ~12% workload
           last workout 'hard' or safety-stopped       → maintain, one-time −1 stage
           last 2 workouts AT baseline 'easy' (not on easier days, recovery not poor)
-                 and progression not paused and below clearance cap → increase +1 stage
+                 and progression not paused and below the profile's top stage → increase +1 stage
           otherwise                                    → maintain
 
    candidates for today (the LOWEST wins; reductions don't stack):
@@ -115,9 +115,9 @@ safety     = SafetyGuard(assessment, profile)
                              >30    → min(baseline, last comfortable stage) − 3, max 15 min (ramp)
 4    'easier' request or low energy → baseline − 2
 5    one hard workout / skipped as too hard → baseline − 1
-4b   'harder' request → +1 stage, refused if safety/recovery/return ramp/low energy/clearance cap
+4b   'harder' request → +1 stage, refused if recovery/return ramp/low energy/top of program
 
-7  WorkoutGenerator(stage, minutes = min(shortenTo, defaultMinutes, return cap))
+7  WorkoutGenerator(stage, minutes = min(shortenTo, defaultMinutes, return cap), profile speed factor, goal tweak)
    SafetyGuard.clampWorkout(level limits, global limits)
    return workout + explanation + safety notes + whether progression/harder are allowed
 ```
@@ -168,9 +168,32 @@ These are executable: `tests/examples.test.js`.
 * An LLM is not used. If one is added later it should only rephrase the engine's explanation,
   never set speeds or workloads.
 
+## Scheduling and calendars
+
+* **Planner** (`planSchedule`): fills each week with *workouts per week* sessions on the chosen days
+  inside the time window, spread out, avoiding weekly busy times and calendar events (with a
+  10-minute buffer). Sessions that start clashing are moved (same day later, then the next free
+  preferred day, then any free time in the next 3 days). Valid sessions never move. Skipped or
+  missed sessions still count toward the week, so there are **never catch-up sessions**.
+* **Google Calendar** (`google.js`): with the user's own OAuth Client ID, Stride reads busy events
+  (timed, not marked "free"), plans around them, and writes workout events with two pop-up
+  reminders. Moving a Stride event in Google moves the session; deleting it counts as skipped.
+* **iPhone Calendar:** upcoming sessions export as an `.ics` file with two alerts per event.
+* **Reminders:** calendar alerts show the event title, so the title is a funny line ("Get your lazy
+  ass on the treadmill, Tal"). While the app is open it also shows an in-app reminder.
+* **Missed sessions:** a planned session that passes without a workout prompts "What happened?";
+  the answer is logged as a missed record and never lowers fitness by itself.
+
+## Medals
+
+Computed from history (`medals.js`): workouts (1-100), total distance (1-250 km, incl. half and
+full marathon), weekly streaks (2-52 weeks in a row hitting the weekly goal; the current week never
+breaks a streak early), and specials (first jog, early bird, night owl, comeback, 30-minute workout).
+New medals pop up after the check-in.
+
 ## Safety stance
 
-The app does not diagnose. It recommends medical clearance before brisker exercise because of
-the user's history of significant anemia and fatigue, stops on red-flag symptoms with an urgent
-care message, recommends rest for dizziness/pain/unexplained severe fatigue, never treats a
-safety stop as a failure, and never requires running.
+The user is assumed healthy: there are no medical warnings, symptom questionnaires or permission
+gates. The plan still eases off for poor recovery, repeated exhaustion and hard sessions, the user can
+stop any workout instantly, and the "I don't feel well" button ends a workout without counting it
+against them.

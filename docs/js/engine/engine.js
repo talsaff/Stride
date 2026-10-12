@@ -15,7 +15,8 @@ import { ALGORITHM_VERSION, RULES, MAX_STAGE, clampStage, levelOfStage } from '.
 import { assessReadiness } from './readiness.js';
 import { evaluateSafety, clampWorkout, maxStageAllowed } from './safety.js';
 import { evaluateProgression } from './progression.js';
-import { generateWorkout } from './generator.js';
+import { generateWorkout, workoutDistance } from './generator.js';
+import { speedFactor, goalOptions } from './profile.js';
 import { classifyWorkout } from './feedback.js';
 import { lastCompleted, completedWorkouts } from './history.js';
 import { makeWorkoutRecord } from './schema.js';
@@ -37,12 +38,12 @@ function returnPlan(assessment, history, baseline) {
     case 'modest':
       return {
         stage: Math.max(1, ref - RULES.modestReturnStageDrop), maxMinutes: null,
-        why: `It has been ${d} days since your last walk. Welcome back! Today repeats a comfortable workout at a slightly lighter load, then builds back up.`,
+        why: `It has been ${d} days since your last workout. Welcome back! Today repeats a comfortable workout at a slightly lighter load, then builds back up.`,
       };
     case 'long':
       return {
         stage: Math.max(1, ref - RULES.longBreakStageDrop), maxMinutes: RULES.longBreakMaxMinutes,
-        why: `It has been ${d} days since your last walk. Welcome back! Today is short and easy so we can see how it feels. Your history and progress are all still here.`,
+        why: `It has been ${d} days since your last workout. Welcome back! Today is short and easy so we can see how it feels. Your history and progress are all still here.`,
       };
     case 'resume': {
       if (!last.return_ramp || last.effective_stage >= baseline) return null;
@@ -60,7 +61,7 @@ export function decide({ profile, state, history, readiness, request = {}, now }
   const temp = request.temp ?? state.tempAdjustment ?? 'none';
   const shortenTo = request.shortenTo ?? state.shortenTo ?? null;
   const assessment = assessReadiness({ readiness, history, now });
-  const safety = evaluateSafety(assessment, profile);
+  const safety = evaluateSafety(assessment);
   const explanation = [];
   const modifiers = [];
 
@@ -142,7 +143,7 @@ export function decide({ profile, state, history, readiness, request = {}, now }
   if (effective + RULES.harderStageRise > Math.min(cap, MAX_STAGE)) {
     if (harderAllowed) harderBlockedReason = effective >= MAX_STAGE
       ? 'This is already the hardest workout in the program.'
-      : 'A harder workout needs medical clearance first (see Settings).';
+      : 'This is already the top of your program. Switch to running in your profile to go further.';
     harderAllowed = false;
   }
   if (temp === 'harder') {
@@ -170,7 +171,12 @@ export function decide({ profile, state, history, readiness, request = {}, now }
     modifiers.push('shortened');
   }
   const easier = reductions.some((r) => r.source === 'easier' || r.source === 'recovery');
-  const raw = generateWorkout(effective, { targetMinutes, easier });
+  const goal = goalOptions(profile);
+  const raw = generateWorkout(effective, {
+    targetMinutes, easier, speedFactor: speedFactor(profile),
+    extraEasyMinutes: shortenTo || maxMinutes != null || easier ? 0 : goal.extraEasyMinutes ?? 0,
+    capMinutes: goal.capMinutes ?? null,
+  });
   const workout = clampWorkout(raw, raw.level);
   if (!shortenTo && targetMinutes && workout.totalMinutes < workout.naturalMinutes) {
     explanation.push(`Fitted to your preferred ${targetMinutes}-minute session.`);
@@ -206,7 +212,7 @@ function headlineFor(action, modifiers) {
   if (action === 'increase') return 'Small step up today';
   if (action === 'decrease') return 'Resetting to a comfortable base';
   if (modifiers.includes('after_hard')) return 'Taking it a bit easier today';
-  return 'Your walk for today';
+  return 'Your workout for today';
 }
 
 // Persist the baseline change a decision implies. Called when the user starts
@@ -246,7 +252,8 @@ export function recordWorkout({ state, decision, session, feedback, readiness, n
     planned_intervals: plan.segments.map(({ type, minutes, speed }) => ({ type, minutes, speed })),
     completed_intervals: session.segments.filter((s) => s.done).length,
     planned_work_intervals: plan.workIntervals,
-    completed_work_intervals: session.segments.filter((s) => s.type === 'work' && s.done && !s.skipped).length,
+    completed_work_intervals: session.segments.filter((s) => (s.type === 'work' || s.type === 'run') && s.done && !s.skipped).length,
+    distance_km: Math.round(workoutDistance(done.map((s) => ({ ...s, completedMinutes: s.completedMinutes ?? 0 }))) * 100) / 100,
     actual_speed_by_interval: done.map((s) => ({ type: s.type, minutes: Math.round(s.completedMinutes * 10) / 10, speed: s.speed, skipped: !!s.skipped })),
     baseline_program_level: levelOfStage(state.baselineStage),
     baseline_stage: state.baselineStage,

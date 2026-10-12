@@ -10,7 +10,7 @@ const examples = [
   {
     name: 'A. Brand-new user',
     inp: input(),
-    expect: { stage: 1, minutes: 13, action: 'maintain', headline: /walk for today/ },
+    expect: { stage: 1, minutes: 13, action: 'maintain', headline: /workout for today/ },
   },
   {
     name: 'B. Two comfortable weeks at level 2 (1x/week)',

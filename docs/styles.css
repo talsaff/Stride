@@ -331,3 +331,57 @@ textarea:focus, input:focus { border-color: var(--primary); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 @media (min-width: 400px) { .title { font-size: 34px; } }
+
+/* ---------- v2: profile, plan, medals ---------- */
+.tl-run { background: #FF8A65; }
+.dot-run { background: var(--accent); }
+.tabbar { gap: 0; padding-left: 4px; padding-right: 4px; }
+.tabbar button { font-size: 10.5px; }
+.tabbar button svg { width: 24px; height: 24px; }
+
+.avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: var(--primary); color: var(--primary-ink); font-weight: 800; font-size: 18px; box-shadow: var(--shadow);
+}
+.avatar.sm { width: 32px; height: 32px; font-size: 14px; box-shadow: none; }
+.icon-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); font-size: 26px; line-height: 1; color: var(--ink); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+.wiz-top { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; }
+.wiz-dots { display: flex; gap: 6px; }
+.wiz-dots span { width: 8px; height: 8px; border-radius: 99px; background: var(--line); transition: width .2s, background .2s; }
+.wiz-dots span.on { background: var(--primary); width: 18px; }
+.level-opt[aria-disabled="true"] { opacity: .5; }
+.level-num { font-size: 18px; }
+
+.select {
+  flex: 1; min-height: 46px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface);
+  padding: 0 12px; font-weight: 600; -webkit-appearance: none; appearance: none;
+}
+
+.kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 12px; }
+.kv { display: flex; flex-direction: column; font-size: 14px; min-width: 0; }
+.kv b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
+
+.sess { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.sess:first-of-type { border-top: 0; }
+.next-now { background: var(--accent-soft); box-shadow: none; }
+.next-now .eyebrow { color: var(--accent); }
+
+.medal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.medal {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+  padding: 14px 10px; border-radius: 18px; background: var(--surface-2); line-height: 1.25;
+}
+.medal b { font-size: 14px; }
+.medal .small { font-size: 12px; }
+.medal-emoji { font-size: 40px; line-height: 1.1; filter: grayscale(1); opacity: .35; }
+.medal.earned { background: var(--primary-soft); }
+.medal.earned .medal-emoji { filter: none; opacity: 1; animation: pop .4s ease; }
+.medal-date { color: var(--primary); font-weight: 700; }
+.progress.sm { width: 100%; height: 6px; margin: 6px 0 0; }
+
+.celebrate { display: flex; justify-content: center; gap: 12px; margin: 8px 0 6px; }
+.medal-big { font-size: 72px; animation: pop .6s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { 0% { transform: scale(.3) rotate(-15deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
+.badge { white-space: nowrap; }

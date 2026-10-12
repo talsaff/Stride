@@ -12,12 +12,14 @@ import { NOW, daysAgo, workout, easy, ok, hard, missed, input } from './helpers.
 
 describe('configuration', () => {
   test('adjacent stages change exactly one primary workload variable', () => {
-    const keys = ['comfort', 'brisk', 'n', 'work', 'rec', 'steady'];
+    const keys = ['comfort', 'brisk', 'run', 'n', 'work', 'rec', 'steady'];
     for (let s = 2; s <= MAX_STAGE; s++) {
       const a = STAGES[s - 1], b = STAGES[s];
       const diff = keys.filter((k) => a[k] !== b[k]);
       if (!a.brisk && b.brisk) continue; // introducing pace changes is its own single step
-      const primary = new Set(diff.map((k) => (k === 'work' || k === 'rec' ? 'intervalLength' : k)));
+      if (!a.run && b.run) continue;     // switching to the first jogs is its own single step
+      // Fewer-but-longer intervals is one change of interval structure.
+      const primary = new Set(diff.map((k) => (k === 'work' || k === 'rec' || k === 'n' ? 'structure' : k)));
       assert.equal(primary.size, 1, `stage ${s - 1} → ${s} changes ${diff.join(', ')}`);
     }
   });
@@ -28,15 +30,19 @@ describe('configuration', () => {
       const lim = LEVELS[w.level];
       assert.ok(w.totalMinutes >= lim.totalMinutes[0] && w.totalMinutes <= lim.totalMinutes[1], `stage ${s} duration`);
       for (const seg of w.segments) {
-        assert.ok(seg.speed <= GLOBAL_LIMITS.maxBriskSpeed, 'never running speeds');
-        if (seg.type === 'work') assert.ok(seg.speed >= lim.briskSpeed[0] && seg.speed <= lim.briskSpeed[1]);
+        if (seg.type === 'run') assert.ok(lim.run && seg.speed <= GLOBAL_LIMITS.maxRunSpeed, 'jogs only on running levels');
+        else assert.ok(seg.speed <= GLOBAL_LIMITS.maxWalkSpeed, 'walking speeds');
+        if (seg.type === 'work' || seg.type === 'run') assert.ok(seg.speed >= lim.briskSpeed[0] && seg.speed <= lim.briskSpeed[1], `stage ${s} speed`);
       }
-      assert.ok(w.targetExertion[1] <= 6, 'never prescribes hard or maximal effort');
+      assert.ok(w.targetExertion[1] <= 7, 'never prescribes all-out effort');
     }
   });
 
   test('workload grows monotonically up the ladder', () => {
-    for (let s = 2; s <= MAX_STAGE; s++) assert.ok(stageWorkload(s) >= stageWorkload(s - 1) - 1e-9, `stage ${s}`);
+    for (let s = 2; s <= MAX_STAGE; s++) {
+      if (s === 16) continue; // first jogs: a new kind of workload, not more of the same
+      assert.ok(stageWorkload(s) >= stageWorkload(s - 1) - 1e-9, `stage ${s}`);
+    }
   });
 });
 
@@ -124,11 +130,12 @@ describe('temporary adjustments', () => {
     assert.ok(d.modifiers.includes('harder_refused'));
   });
 
-  test('harder request cannot exceed the clearance cap', () => {
-    const d = decide(input({ stage: 9, history: [ok(4, 9)], request: { temp: 'harder' } }));
-    assert.equal(d.effectiveStage, 9);
-    const cleared = decide(input({ stage: 9, history: [ok(4, 9)], profile: { medicalClearance: true }, request: { temp: 'harder' } }));
-    assert.equal(cleared.effectiveStage, 10);
+  test('harder request cannot go past the top of a walking-only program', () => {
+    const d = decide(input({ stage: 15, history: [ok(4, 15)], request: { temp: 'harder' } }));
+    assert.equal(d.effectiveStage, 15);
+    assert.equal(d.harderAllowed, false);
+    const runner = decide(input({ stage: 15, history: [ok(4, 15)], profile: { preference: 'run' }, request: { temp: 'harder' } }));
+    assert.equal(runner.effectiveStage, 16);
   });
 });
 
@@ -170,11 +177,16 @@ describe('permanent adjustments', () => {
     assert.equal(res.state.baselineStage, 5);
   });
 
-  test('raising to level 4 needs medical clearance', () => {
+  test('levels with running need a running preference', () => {
+    const inp = input({ stage: 15, history: [ok(3, 15)] });
+    assert.equal(applyPermanentChange({ ...inp, ...ctx(inp), targetLevel: 6 }).accepted, false);
+    const runner = input({ stage: 15, history: [ok(3, 15)], profile: { preference: 'run' } });
+    assert.equal(applyPermanentChange({ ...runner, ...ctx(runner), targetLevel: 6 }).accepted, true);
+  });
+
+  test('levels 4 and 5 need no extra permission', () => {
     const inp = input({ stage: 8, history: [ok(3, 8)] });
-    assert.equal(applyPermanentChange({ ...inp, ...ctx(inp), targetLevel: 4 }).accepted, false);
-    const cleared = input({ stage: 8, history: [ok(3, 8)], profile: { medicalClearance: true } });
-    assert.equal(applyPermanentChange({ ...cleared, ...ctx(cleared), targetLevel: 4 }).accepted, true);
+    assert.equal(applyPermanentChange({ ...inp, ...ctx(inp), targetLevel: 4 }).accepted, true);
   });
 });
 
@@ -282,10 +294,11 @@ describe('performance-based progression', () => {
     assert.equal(d.effectiveStage, 4);
   });
 
-  test('progression stops at the clearance cap', () => {
-    const d = decide(input({ stage: 9, history: [easy(8, 9), easy(3, 9)] }));
+  test('progression stops at the top of a walking-only program', () => {
+    const d = decide(input({ stage: 15, history: [easy(8, 15), easy(3, 15)] }));
     assert.equal(d.baseline.action, 'maintain');
-    assert.match(d.explanation.join(' '), /clearance/);
+    const runner = decide(input({ stage: 15, history: [easy(8, 15), easy(3, 15)], profile: { preference: 'run' } }));
+    assert.equal(runner.baseline.to, 16);
   });
 });
 
@@ -294,7 +307,7 @@ describe('safety overrides', () => {
     const d = decide(input({ stage: 6, history: [easy(8, 6), easy(3, 6)], readiness: { symptoms: ['chest_pain'] }, request: { temp: 'harder' } }));
     assert.equal(d.status, 'urgent');
     assert.equal(d.workout, null);
-    assert.match(d.explanation[0], /urgent medical/);
+    assert.match(d.explanation[0], /medical help/);
   });
 
   test('dizziness or significant pain means rest today', () => {
@@ -310,11 +323,11 @@ describe('safety overrides', () => {
     assert.ok(d.effectiveStage < 4);
   });
 
-  test('persistent unusual fatigue pauses progression and recommends medical advice', () => {
+  test('feeling wiped out repeatedly pauses progression', () => {
     const history = [ok(10, 4, { feeling: 'exhausted' }), missed(5, 'low_energy')];
     const d = decide(input({ stage: 4, history }));
     assert.equal(d.progressionAllowed, false);
-    assert.match(d.safetyNotes.join(' '), /doctor/);
+    assert.doesNotMatch(d.safetyNotes.join(' '), /doctor|anemia|clearance/i);
   });
 
   test('a safety stop is not treated as a failure or a hard signal', () => {

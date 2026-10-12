@@ -1,7 +1,7 @@
 {
   "name": "Stride – Treadmill Coach",
   "short_name": "Stride",
-  "description": "A gentle, adaptive treadmill walking coach.",
+  "description": "An adaptive treadmill coach that fits your body and your calendar.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
