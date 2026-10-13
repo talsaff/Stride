@@ -389,6 +389,6 @@ textarea:focus, input:focus { border-color: var(--primary); }
 /* ---------- logo ---------- */
 .logo svg { width: 76px; height: 76px; color: #fff; }
 .wordmark { display: inline-flex; align-items: flex-end; color: var(--ink); line-height: .8; }
-.wordmark svg { height: calc(var(--wm) * 1.2); width: auto; margin: 0 calc(var(--wm) * -.1) calc(var(--wm) * -.1) 0; }
-.wordmark span { font-size: var(--wm); font-weight: 800; font-style: italic; letter-spacing: -.03em; }
+.wordmark svg { height: calc(var(--wm) * .76); width: auto; margin: 0 calc(var(--wm) * .02) calc(var(--wm) * -.02) 0; }
+.wordmark span { font-size: var(--wm); font-weight: 800; font-style: italic; letter-spacing: -.03em; line-height: .75; }
 .logo { background: #1E8A6E; }

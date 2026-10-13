@@ -3,23 +3,27 @@ const s = (d, extra = '') =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 
 // The Stride mark: a runner whose body (torso, front thigh, shin) is a sharp
-// S. Arms and head float free. `bg` paints the small gap where the back leg
-// passes behind the body, so it must match whatever the mark sits on.
-export function logoMark(fg, bg) {
+// S in the brand's S color. Arms, head and back leg float around it.
+// `bg` paints the small gap where the back leg passes behind the body, so it
+// must match whatever the mark sits on.
+export const S_COLOR = '#FF8A5B';        // the special S color (change here)
+const S_PATH = 'M60 27 L 44 45 L 69 61 L 50 88';
+
+export function logoMark(fg, bg, sColor = S_COLOR) {
   const st = (c, w) => `style="stroke:${c}" stroke-width="${w}"`;
-  const S = 'M60 27 L 44 45 L 69 61 L 50 88';
   return `<g transform="translate(4 4) scale(.92)" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <path ${st(fg, 11)} d="M44 47 L 30 66 L 12 62"/>
-    <path ${st(bg, 22)} d="${S}"/>
-    <path ${st(fg, 14)} d="${S}"/>
-    <path ${st(fg, 9.5)} d="M66 38 L 76 45 L 88 34"/>
-    <path ${st(fg, 9.5)} d="M48 23 L 36 27 L 29 38"/>
+    <path ${st(bg, 22)} d="${S_PATH}"/>
+    <path ${st(sColor, 14)} d="${S_PATH}"/>
+    <path ${st(fg, 9.5)} d="M66 38 L 79 44 L 86 31"/>
+    <path ${st(fg, 9.5)} d="M47 24 L 33 23 L 25 33"/>
     <circle cx="71" cy="11" r="9" style="fill:${fg}" stroke="none"/></g>`;
 }
 
-export function wordmark(size = 64) {
+// The name: the runner's S on its own (no head, arms or back leg) + "tride".
+export function wordmark(size = 64, sColor = S_COLOR) {
   return `<span class="wordmark" style="--wm:${size}px" role="img" aria-label="Stride">
-    <svg viewBox="7 2 86 90" aria-hidden="true">${logoMark('var(--primary)', 'var(--bg)')}</svg><span aria-hidden="true">tride</span></span>`;
+    <svg viewBox="36 19 41 77" aria-hidden="true"><path d="${S_PATH}" fill="none" style="stroke:${sColor}" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></svg><span aria-hidden="true">tride</span></span>`;
 }
 
 export const ICONS = {
