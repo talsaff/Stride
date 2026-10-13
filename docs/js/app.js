@@ -4,7 +4,7 @@
 import * as store from './storage.js';
 import * as gcal from './google.js';
 import * as push from './push.js';
-import { ICONS, LOGO_MARK, wordmark } from './icons.js';
+import { ICONS, logoMark, wordmark } from './icons.js';
 import { decide, commitDecision, recordWorkout } from './engine/engine.js';
 import { applyPermanentChange } from './engine/progression.js';
 import { assessReadiness } from './engine/readiness.js';
@@ -170,7 +170,7 @@ function renderWizard() {
   switch (step) {
     case 'welcome':
       return `<section class="welcome">
-        <div class="logo"><svg viewBox="0 0 100 100" aria-hidden="true">${LOGO_MARK}</svg></div>
+        <div class="logo"><svg viewBox="0 0 100 100" aria-hidden="true">${logoMark('#fff', '#1E8A6E')}</svg></div>
         <h1 class="sr-only">Stride</h1>
         <div style="margin-bottom:10px">${wordmark(56)}</div>
         <p class="subtitle">Treadmill workouts that fit your body, your energy and your calendar.</p>

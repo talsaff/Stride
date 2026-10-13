@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="color:#ffffff"><rect width="100" height="100" fill="#1E8A6E"/><g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round" transform="translate(7 0) skewX(-9)">
-  <path stroke-width="13" d="M65 30 C 60 19, 37 18, 37 32 C 37 45, 66 44, 65 60 C 64 75, 41 78, 29 70"/>
-  <path stroke-width="8" d="M29 70 L 15 63"/>
-  <path stroke-width="8" d="M62 64 L 78 69 L 75 85"/>
-  <path stroke-width="8" d="M63 42 L 74 49 L 83 42"/>
-  <circle cx="75" cy="17" r="8" fill="#ffffff" stroke="none"/>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#1E8A6E"/><g transform="translate(4 4) scale(.92)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path style="stroke:#ffffff" stroke-width="11" d="M45 50 L 19 86"/>
+    <path style="stroke:#1E8A6E" stroke-width="22" d="M60 27 L 44 45 L 69 61 L 50 88"/>
+    <path style="stroke:#ffffff" stroke-width="14" d="M60 27 L 44 45 L 69 61 L 50 88"/>
+    <path style="stroke:#ffffff" stroke-width="9.5" d="M66 38 L 76 45 L 88 34"/>
+    <path style="stroke:#ffffff" stroke-width="9.5" d="M48 23 L 36 27 L 29 38"/>
+    <circle cx="71" cy="11" r="9" style="fill:#ffffff" stroke="none"/></g></svg>

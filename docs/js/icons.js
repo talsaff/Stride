@@ -2,12 +2,24 @@
 const s = (d, extra = '') =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 
-// The Stride mark: a runner whose body is the letter S.
-export const LOGO_MARK = `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(7 0) skewX(-9)"> <path stroke-width="13" d="M65 30 C 60 19, 37 18, 37 32 C 37 45, 66 44, 65 60 C 64 75, 41 78, 29 70"/> <path stroke-width="8" d="M29 70 L 15 63"/> <path stroke-width="8" d="M62 64 L 78 69 L 75 85"/> <path stroke-width="8" d="M63 42 L 74 49 L 83 42"/> <circle cx="75" cy="17" r="8" fill="currentColor" stroke="none"/> </g>`;
+// The Stride mark: a runner whose body (torso, front thigh, shin) is a sharp
+// S. Arms and head float free. `bg` paints the small gap where the back leg
+// passes behind the body, so it must match whatever the mark sits on.
+export function logoMark(fg, bg) {
+  const st = (c, w) => `style="stroke:${c}" stroke-width="${w}"`;
+  const S = 'M60 27 L 44 45 L 69 61 L 50 88';
+  return `<g transform="translate(4 4) scale(.92)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path ${st(fg, 11)} d="M45 50 L 19 86"/>
+    <path ${st(bg, 22)} d="${S}"/>
+    <path ${st(fg, 14)} d="${S}"/>
+    <path ${st(fg, 9.5)} d="M66 38 L 76 45 L 88 34"/>
+    <path ${st(fg, 9.5)} d="M48 23 L 36 27 L 29 38"/>
+    <circle cx="71" cy="11" r="9" style="fill:${fg}" stroke="none"/></g>`;
+}
 
 export function wordmark(size = 64) {
   return `<span class="wordmark" style="--wm:${size}px" role="img" aria-label="Stride">
-    <svg viewBox="12 8 76 80" aria-hidden="true">${LOGO_MARK}</svg><span aria-hidden="true">tride</span></span>`;
+    <svg viewBox="13 2 80 90" aria-hidden="true">${logoMark('var(--primary)', 'var(--bg)')}</svg><span aria-hidden="true">tride</span></span>`;
 }
 
 export const ICONS = {

@@ -1,6 +1,6 @@
 // Offline support: cache the app shell, serve it cache-first, refresh in the
 // background. Bump VERSION whenever app files change.
-const VERSION = 'stride-v6';
+const VERSION = 'stride-v7';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/icons.js', 'js/storage.js', 'js/google.js', 'js/push.js',
