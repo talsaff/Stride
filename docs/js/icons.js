@@ -9,7 +9,7 @@ export function logoMark(fg, bg) {
   const st = (c, w) => `style="stroke:${c}" stroke-width="${w}"`;
   const S = 'M60 27 L 44 45 L 69 61 L 50 88';
   return `<g transform="translate(4 4) scale(.92)" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path ${st(fg, 11)} d="M45 50 L 19 86"/>
+    <path ${st(fg, 11)} d="M44 47 L 30 66 L 12 62"/>
     <path ${st(bg, 22)} d="${S}"/>
     <path ${st(fg, 14)} d="${S}"/>
     <path ${st(fg, 9.5)} d="M66 38 L 76 45 L 88 34"/>
@@ -19,7 +19,7 @@ export function logoMark(fg, bg) {
 
 export function wordmark(size = 64) {
   return `<span class="wordmark" style="--wm:${size}px" role="img" aria-label="Stride">
-    <svg viewBox="13 2 80 90" aria-hidden="true">${logoMark('var(--primary)', 'var(--bg)')}</svg><span aria-hidden="true">tride</span></span>`;
+    <svg viewBox="7 2 86 90" aria-hidden="true">${logoMark('var(--primary)', 'var(--bg)')}</svg><span aria-hidden="true">tride</span></span>`;
 }
 
 export const ICONS = {
