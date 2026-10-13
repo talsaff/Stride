@@ -1,6 +1,6 @@
 // Offline support: cache the app shell, serve it cache-first, refresh in the
 // background. Bump VERSION whenever app files change.
-const VERSION = 'stride-v5';
+const VERSION = 'stride-v6';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/icons.js', 'js/storage.js', 'js/google.js', 'js/push.js',
@@ -8,7 +8,7 @@ const FILES = [
   'js/engine/readiness.js', 'js/engine/safety.js', 'js/engine/generator.js', 'js/engine/progression.js',
   'js/engine/engine.js', 'js/engine/personalization.js', 'js/engine/profile.js',
   'js/engine/medals.js', 'js/engine/schedule.js',
-  'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
+  'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo.svg',
 ];
 
 self.addEventListener('install', (e) => {

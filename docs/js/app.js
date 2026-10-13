@@ -4,7 +4,7 @@
 import * as store from './storage.js';
 import * as gcal from './google.js';
 import * as push from './push.js';
-import { ICONS } from './icons.js';
+import { ICONS, LOGO_MARK, wordmark } from './icons.js';
 import { decide, commitDecision, recordWorkout } from './engine/engine.js';
 import { applyPermanentChange } from './engine/progression.js';
 import { assessReadiness } from './engine/readiness.js';
@@ -170,8 +170,9 @@ function renderWizard() {
   switch (step) {
     case 'welcome':
       return `<section class="welcome">
-        <div class="logo">${ICONS.run}</div>
-        <h1 class="title">Stride</h1>
+        <div class="logo"><svg viewBox="0 0 100 100" aria-hidden="true">${LOGO_MARK}</svg></div>
+        <h1 class="sr-only">Stride</h1>
+        <div style="margin-bottom:10px">${wordmark(56)}</div>
         <p class="subtitle">Treadmill workouts that fit your body, your energy and your calendar.</p>
         <div class="features card">
           ${feature('user', 'Built for you', 'Your age, body, fitness and goal shape every plan, and it keeps adapting as you go.')}
@@ -831,7 +832,8 @@ function renderSettings() {
     <label class="list-btn" style="cursor:pointer"><span>Import backup</span><span class="chev">${ICONS.chev}</span><input type="file" id="import-file" accept="application/json,.json" class="sr-only"></label>
     <button class="list-btn" data-act="sheet" data-arg="delete" style="color:var(--danger)"><span>Delete all data</span></button>
   </section>
-  <p class="small muted" style="text-align:center;margin:10px 20px">Stride ${ALGORITHM_VERSION} · rules-based and transparent.</p>`;
+  <div style="text-align:center;margin:18px 0 6px;opacity:.85">${wordmark(28)}</div>
+  <p class="small muted" style="text-align:center;margin:0 20px 10px">Version ${ALGORITHM_VERSION}</p>`;
 }
 
 function levelOptions() {

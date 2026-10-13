@@ -2,6 +2,14 @@
 const s = (d, extra = '') =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 
+// The Stride mark: a runner whose body is the letter S.
+export const LOGO_MARK = `<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" transform="translate(7 0) skewX(-9)"> <path stroke-width="13" d="M65 30 C 60 19, 37 18, 37 32 C 37 45, 66 44, 65 60 C 64 75, 41 78, 29 70"/> <path stroke-width="8" d="M29 70 L 15 63"/> <path stroke-width="8" d="M62 64 L 78 69 L 75 85"/> <path stroke-width="8" d="M63 42 L 74 49 L 83 42"/> <circle cx="75" cy="17" r="8" fill="currentColor" stroke="none"/> </g>`;
+
+export function wordmark(size = 64) {
+  return `<span class="wordmark" style="--wm:${size}px" role="img" aria-label="Stride">
+    <svg viewBox="12 8 76 80" aria-hidden="true">${LOGO_MARK}</svg><span aria-hidden="true">tride</span></span>`;
+}
+
 export const ICONS = {
   walk: s('<circle cx="13" cy="4" r="2"/><path d="M9 21l2.5-6.5L14 17v4"/><path d="M7 11l3-3.5 4 1.5 2 3 3 1"/><path d="M10 7.5L11.5 14"/>'),
   home: s('<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>'),

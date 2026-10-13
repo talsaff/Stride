@@ -385,3 +385,10 @@ textarea:focus, input:focus { border-color: var(--primary); }
 .medal-big { font-size: 72px; animation: pop .6s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes pop { 0% { transform: scale(.3) rotate(-15deg); opacity: 0; } 100% { transform: scale(1) rotate(0); opacity: 1; } }
 .badge { white-space: nowrap; }
+
+/* ---------- logo ---------- */
+.logo svg { width: 76px; height: 76px; color: #fff; }
+.wordmark { display: inline-flex; align-items: flex-end; color: var(--ink); line-height: .8; }
+.wordmark svg { height: calc(var(--wm) * 1.04); width: auto; color: var(--primary); margin: 0 calc(var(--wm) * -.08) calc(var(--wm) * -.06) calc(var(--wm) * -.06); }
+.wordmark span { font-size: var(--wm); font-weight: 800; font-style: italic; letter-spacing: -.03em; }
+.logo { background: #1E8A6E; }

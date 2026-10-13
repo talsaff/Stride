@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icons/wordmark.png" alt="Stride" height="84"></p>
+
 # Stride: adaptive treadmill coach (iPhone app)
 
 An adaptive treadmill coach. A runner profile (age, body, fitness, walk/run preference, goal)
