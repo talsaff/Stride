@@ -397,10 +397,8 @@ function renderToday() {
       <div><div class="stat-num">${fmtSpeed(w.topSpeed)}</div><div class="stat-label">Top km/h</div></div>
     </div>
     <div class="timeline" aria-hidden="true">${w.segments.map((s) => `<span class="tl-${s.type}" style="flex:${s.minutes}"></span>`).join('')}</div>
-    <button class="btn white lg block" style="margin-top:16px" data-act="start"><span class="play">${ICONS.play}</span> Start workout</button>
+    <div class="hero-go">Tap to get ready <span>›</span></div>
   </section>
-
-  <button class="link small" style="display:block;margin:-4px auto 8px;font-size:14px" data-act="tab" data-arg="go">Tired, strong or short on time? Adjust in Start ›</button>
 
   <section class="card">
     <h3>The plan · effort ${w.targetExertion[0]}–${w.targetExertion[1]} out of 10</h3>

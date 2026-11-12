@@ -486,3 +486,5 @@ body.go-mode .tab-go-circle { border-color: #0F4D3E; }
 .hero-link:active { transform: scale(.985); }
 .sess.flash { animation: flash 1.6s ease; border-radius: 12px; }
 @keyframes flash { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }
+.hero-go { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; opacity: .92; }
+.hero-go span { font-size: 22px; line-height: 1; }
