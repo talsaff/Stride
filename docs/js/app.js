@@ -382,7 +382,6 @@ function renderToday() {
   const modeBadge = d.mode === 'advanced' ? '<span class="badge hot">Advanced · today only</span>'
     : d.mode === 'easy' ? '<span class="badge">Easy day · 3.5–4.5 km/h</span>'
       : d.effectiveStage !== d.baseline.to ? '<span class="badge">Adjusted for today</span>' : '';
-  const energyHigh = r.energy === 'high' && d.mode !== 'advanced';
   html += `
   <section class="card hero">
     ${S_WATERMARK}
@@ -399,7 +398,6 @@ function renderToday() {
     <button class="btn white lg block" style="margin-top:16px" data-act="start"><span class="play">${ICONS.play}</span> Start workout</button>
   </section>
 
-  ${energyHigh ? `<button class="card nudge" data-act="advanced">${ICONS.bolt}<span><b>Feeling strong today?</b><br><span class="small">Swap in the advanced workout with real running. Today only.</span></span></button>` : ''}
   <div class="actions">
     ${actionBtn('easier', 'leaf', 'Tired today', d.mode === 'easy')}
     ${actionBtn('advanced', 'bolt', 'Advanced', d.mode === 'advanced')}
@@ -458,16 +456,16 @@ function actionBtn(act, icon, label, on, disabled = false) {
   return `<button class="action ${on ? 'on' : ''}" data-act="${act}" ${disabled ? 'aria-disabled="true"' : ''} aria-pressed="${on}">${ICONS[icon]}<span>${esc(label)}</span></button>`;
 }
 
+// One quick question, once a day, and only once there is a last workout to
+// recover from. It disappears as soon as it is answered. Energy is handled by
+// the Tired today / Advanced buttons instead.
 function readinessCard(r) {
-  const chip = (field, val, label) =>
-    `<button class="chip" data-act="ready" data-arg="${field}:${val}" aria-pressed="${r[field] === val}">${label}</button>`;
+  if (r.recoveryAnswered || completedWorkouts(data.history).length === 0) return '';
+  const chip = (val, label) => `<button class="chip" data-act="recovery" data-arg="${val}">${label}</button>`;
   return `
   <section class="card">
-    <h3>How are you today?</h3>
-    <div class="q"><span class="q-label small muted">Energy</span><div class="chips">
-      ${chip('energy', 'low', 'Low')}${chip('energy', 'normal', 'Normal')}${chip('energy', 'high', 'High')}</div></div>
-    <div class="q" style="margin-bottom:0"><span class="q-label small muted">Recovery from last time</span><div class="chips">
-      ${chip('recovery', 'poor', 'Poor')}${chip('recovery', 'normal', 'Normal')}${chip('recovery', 'good', 'Good')}</div></div>
+    <h3>How did you recover from last time?</h3>
+    <div class="chips">${chip('poor', 'Still tired')}${chip('normal', 'Okay')}${chip('good', 'Fresh')}</div>
   </section>`;
 }
 
@@ -833,7 +831,6 @@ function renderSettings() {
   </section>
   <section class="card">
     <h3>Preferences</h3>
-    ${sw('autoEasierOnLowEnergy', 'Lighter workout when energy is low', 'Applies automatically when you pick “Low” energy.')}
     ${sw('voiceCues', 'Voice and sound cues', 'Announces each step and treadmill speed.')}
   </section>
   <section class="card">
@@ -1257,10 +1254,12 @@ const actions = {
   'wz-sched'() { readWizardStep(); wiz.draft.scheduleOn = !wiz.draft.scheduleOn; render(); },
   'wz-finish'(arg) { finishWizard(arg); },
   // today
-  ready(arg) {
-    const [field, val] = arg.split(':');
-    setReadiness({ [field]: val });
+  recovery(arg) {
+    setReadiness({ recovery: arg, recoveryAnswered: true });
     render();
+    toast(arg === 'poor'
+      ? 'Got it. Today is the easy version, and the plan waits until you feel fresh.'
+      : arg === 'good' ? 'Fresh, nice! Your workout is ready.' : 'Got it. Your workout is ready.');
   },
   sheet(arg) {
     const [name, param] = arg.split(':');
