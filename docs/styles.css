@@ -484,3 +484,5 @@ body.go-mode .tab-go-circle { border-color: #0F4D3E; }
 .go-ask button[aria-pressed="true"] { background: #fff; color: #146B55; }
 .hero-link { cursor: pointer; transition: transform .1s ease; }
 .hero-link:active { transform: scale(.985); }
+.sess.flash { animation: flash 1.6s ease; border-radius: 12px; }
+@keyframes flash { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }

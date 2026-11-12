@@ -439,7 +439,7 @@ function scheduleCards() {
       <div class="row between"><div><div class="eyebrow">${soon ? (mins <= 0 ? "It's time!" : 'Starting soon') : 'Next workout'}</div>
         <b style="font-size:20px">${esc(fmtWhen(next.start))}</b>${next.moved ? ' <span class="badge">moved</span>' : ''}
         ${soon ? `<p class="small" style="margin-top:4px">${esc(funnyLine(next.id, { name: data.profile.name, minutes: next.minutes }))}</p>` : ''}</div>
-        <div class="row" style="gap:6px"><button class="chip" data-act="sheet" data-arg="move:${next.id}">Move</button><button class="chip" data-act="sheet" data-arg="skip:${next.id}">Skip</button></div>
+        <div class="row" style="gap:6px"><button class="chip" data-act="plan-move" data-arg="${next.id}">Move</button><button class="chip" data-act="sheet" data-arg="skip:${next.id}">Skip</button></div>
       </div></section>`;
   }
   return html;
@@ -1032,7 +1032,7 @@ function renderPlan() {
   const ctx = scheduleCtx();
   const list = upcoming.length ? upcoming.map((s) => {
     const clash = conflictsOf(s, ctx.busy, ctx.external, ctx.sessions);
-    return `<div class="sess"><div><b>${esc(fmtWhen(s.start))}</b><div class="small muted">${s.minutes} min${s.moved ? ' · moved' : ''}${s.googleEventId ? ' · in Google Calendar' : ''}</div>
+    return `<div class="sess" id="sess-${s.id}"><div><b>${esc(fmtWhen(s.start))}</b><div class="small muted">${s.minutes} min${s.moved ? ' · moved' : ''}${s.googleEventId ? ' · in Google Calendar' : ''}</div>
       ${clash ? '<span class="badge accent">Clashes with something</span>' : ''}</div>
       <div class="row" style="gap:6px"><button class="chip" data-act="sheet" data-arg="move:${s.id}">Move</button><button class="chip" data-act="sheet" data-arg="skip:${s.id}">Skip</button></div></div>`;
   }).join('') : '<p class="muted">Nothing planned in the next two weeks. Check your days and time window below.</p>';
@@ -1367,6 +1367,14 @@ const actions = {
   },
   'save-checkin'() { saveCheckin(); },
   'go-plan'() { goShowPlan = !goShowPlan; render(); },
+  // Move from Today: go to the Plan screen, highlight the workout, show the options.
+  'plan-move'(id) {
+    view = 'plan';
+    render();
+    const el = document.getElementById(`sess-${id}`);
+    if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'center' }); }
+    openSheet(sheets.move(id));
+  },
   discard() {
     data.activeSession = null;
     data.state.tempAdjustment = 'none';
@@ -1613,8 +1621,8 @@ if (data.activeSession) {
 } else if (!isProfileComplete(data.profile)) {
   openWizard('complete');
 } else {
+  replan({ silent: false });     // plan first, so Today shows the next workout right away
   render();
-  replan({ silent: false });
   checkReminder();
 }
 push.serviceUrl().then((url) => {
