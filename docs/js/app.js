@@ -104,7 +104,7 @@ function render() {
   if (view !== lastView) { window.scrollTo(0, 0); lastView = view; }
   const full = view === 'workout' || view === 'checkin' || view === 'wizard';
   $app.classList.toggle('fullscreen', full);
-  document.body.classList.toggle('go-mode', view === 'go');
+  document.body.classList.toggle('go-mode', view === 'go' || view === 'workout');
   $tabs.hidden = full;
   if (!full) renderTabs();
   const fn = {
@@ -567,11 +567,12 @@ function renderWorkout() {
   const s = data.activeSession;
   const seg = s.segments[s.index];
   const next = s.segments[s.index + 1];
-  const col = segColor(seg.type);
+  // Colors that read well on the green workout background.
+  const col = { work: '#FF8A5B', run: '#FF8A5B', warmup: '#A8D0F5', cooldown: '#D3C8F2' }[seg.type] ?? '#FFFFFF';
   return `
   <section class="active">
     <div class="active-top">
-      <span class="badge" style="background:color-mix(in srgb, ${col} 18%, transparent);color:${col}">Step ${s.index + 1} of ${s.segments.length}</span>
+      <span class="badge" style="background:rgba(255,255,255,.14);color:#fff">Step ${s.index + 1} of ${s.segments.length}</span>
       ${s.running ? '' : '<span class="paused-label">PAUSED</span>'}
       <span class="muted small" id="w-total"></span>
     </div>
@@ -581,7 +582,7 @@ function renderWorkout() {
       <div class="ring-center">
         <div class="seg-title">${esc(seg.label)}</div>
         <div class="clock" id="w-clock">0:00</div>
-        <div class="speed-pill" style="background:color-mix(in srgb, ${col} 16%, transparent);color:${col}">${fmtSpeed(seg.speed)} km/h</div>
+        <div class="speed-pill" style="background:${col};color:${col === '#FFFFFF' ? '#146B55' : '#10342B'}">${fmtSpeed(seg.speed)} km/h</div>
       </div>
     </div>
     <p class="cue">${esc(seg.cue)}${seg.speed < seg.plannedSpeed ? ' <b>(slowed down, good call)</b>' : ''}</p>

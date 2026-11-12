@@ -528,3 +528,16 @@ body.go-mode .tab-go-circle { border-color: #0F4D3E; }
 .pick label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
 .pick input { width: 100%; min-height: 50px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); padding: 0 12px; font-size: 17px; font-weight: 600; color: var(--ink); }
 .pick label:only-child { grid-column: span 2; }
+
+/* ---------- active workout on green ---------- */
+body.go-mode .active { color: #fff; }
+body.go-mode .active .muted, body.go-mode .active .cue { color: rgba(255,255,255,.85); }
+body.go-mode .active .ring-bg { stroke: rgba(255,255,255,.14); }
+body.go-mode .active .next { background: rgba(255,255,255,.12); box-shadow: none; }
+body.go-mode .active .next .seg-meta, body.go-mode .active .next .seg-meta b { color: #fff; }
+body.go-mode .active .progress { background: rgba(255,255,255,.14); }
+body.go-mode .active .progress > span { background: linear-gradient(90deg, #fff, #FF8A5B); }
+body.go-mode .active .controls .btn { background: rgba(255,255,255,.14); color: #fff; }
+body.go-mode .active .controls .btn.primary { background: #FF8A5B; color: #fff; }
+body.go-mode .active .paused-label { color: #FFB59A; }
+body.go-mode .active .unwell { color: #FFC2AE; }
