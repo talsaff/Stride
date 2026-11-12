@@ -35,11 +35,11 @@ export function totalMinutes(history) {
   return completedWorkouts(history).reduce((sum, w) => sum + w.actual_duration, 0);
 }
 
-// Start of the ISO week (Monday 00:00 local) for a date.
+// Start of the week (Sunday 00:00 local) for a date.
 export function weekStart(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  const day = (d.getDay() + 6) % 7;
+  const day = d.getDay();               // weeks run Sunday to Saturday
   d.setDate(d.getDate() - day);
   return d;
 }

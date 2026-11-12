@@ -118,7 +118,7 @@ export function planSchedule({ prefs, busy = [], external = [], sessions = [], n
 
   // 2. Fill weeks up to perWeek (and trim extras beyond it).
   const horizonEnd = addDays(dayStart(nowD), horizonDays);
-  const weekKey = (d) => { const x = dayStart(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.getTime(); };
+  const weekKey = weekKeyOf;               // weeks run Sunday to Saturday
   for (let w = weekKey(nowD); w < horizonEnd.getTime(); w = weekKey(addDays(new Date(w), 7))) {
     // Skipped/missed sessions still count toward the week: no catch-up sessions.
     // A workout the user moved to another week still counts for its original
@@ -264,7 +264,7 @@ export function toICS(sessions, profile, now) {
 
 export function weekKeyOf(d) {
   const x = dayStart(d);
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  x.setDate(x.getDate() - x.getDay());     // Sunday-based week
   return x.getTime();
 }
 

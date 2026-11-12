@@ -541,3 +541,12 @@ body.go-mode .active .controls .btn { background: rgba(255,255,255,.14); color: 
 body.go-mode .active .controls .btn.primary { background: #FF8A5B; color: #fff; }
 body.go-mode .active .paused-label { color: #FFB59A; }
 body.go-mode .active .unwell { color: #FFC2AE; }
+
+/* date/time pickers: let iOS date inputs shrink so both fit side by side */
+.pick { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.pick label { min-width: 0; }
+.pick input { min-width: 0; max-width: 100%; display: block; -webkit-appearance: none; appearance: none; text-align: center; }
+.pick input::-webkit-date-and-time-value { text-align: center; }
+.day-sheet { margin-top: 8px; }
+.day-sheet .day-item:first-child { border-top: 0; }
+.sheet-actions .btn svg { width: 20px; height: 20px; }

@@ -230,7 +230,7 @@ function renderWizard() {
           <div class="q"><span class="q-label">Workouts per week</span>
             <div class="chips">${[1, 2, 3, 4, 5].map((n) => chip('workoutsPerWeek', n, `${n}×`)).join('')}</div></div>
           <div class="q"><span class="q-label">Days that usually work</span>
-            <div class="chips">${[1, 2, 3, 4, 5, 6, 0].map((n) => `<button class="chip" data-act="wz-day" data-arg="${n}" aria-pressed="${d.days.includes(n)}">${DAY_SHORT[n]}</button>`).join('')}</div></div>
+            <div class="chips">${[0, 1, 2, 3, 4, 5, 6].map((n) => `<button class="chip" data-act="wz-day" data-arg="${n}" aria-pressed="${d.days.includes(n)}">${DAY_SHORT[n]}</button>`).join('')}</div></div>
           <div class="q" style="margin-bottom:0"><span class="q-label">Time window</span>
             <div class="row"><select id="wz-from" class="select">${timeOptions(d.from)}</select><span class="muted">to</span><select id="wz-to" class="select">${timeOptions(d.to)}</select></div></div>
         </section>
@@ -920,6 +920,16 @@ function replan({ silent = false } = {}) {
   pushSync();
 }
 
+// When the schedule settings change, plan upcoming workouts again from
+// scratch. Ones the user moved or added by hand (pinned) stay put.
+function rescheduleUpcoming() {
+  if (!data.schedule.enabled) return;
+  const now = new Date();
+  data.schedule.sessions = data.schedule.sessions.filter((x) => !(x.status === 'planned' && new Date(x.start) > now && !x.pinned));
+  replan({ silent: true });
+  toast('Upcoming workouts re-planned to match your settings.');
+}
+
 // ---------- push reminders
 
 function pushSessions() {
@@ -1061,7 +1071,7 @@ function renderPlan() {
   if (!planSel) planSel = today;
   const days = calendarDays();
   const y = planMonth.getFullYear(), m = planMonth.getMonth();
-  const first = (new Date(y, m, 1).getDay() + 6) % 7;            // Monday-first grid
+  const first = new Date(y, m, 1).getDay();                   // Sunday-first grid
   const count = new Date(y, m + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < first; i++) cells.push('<span></span>');
@@ -1085,12 +1095,12 @@ function renderPlan() {
   ${data.schedule.enabled ? '' : `<section class="card soft"><b>Scheduling is off.</b><p class="small muted" style="margin:4px 0 10px">Turn it on and Stride books your workouts into free slots.</p><button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`}
   <section class="card cal">
     <div class="cal-head"><button data-act="cal-month" data-arg="-1" aria-label="Previous month">‹</button><b>${esc(monthName)}</b><button data-act="cal-month" data-arg="1" aria-label="Next month">›</button></div>
-    <div class="cal-grid cal-dow">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((x) => `<span>${x}</span>`).join('')}</div>
+    <div class="cal-grid cal-dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((x) => `<span>${x}</span>`).join('')}</div>
     <div class="cal-grid">${cells.join('')}</div>
     <div class="cal-legend"><span><i class="done"></i> done</span><span><i class="planned"></i> planned</span><span><i class="missed"></i> missed</span></div>
   </section>
   <div class="tiles three">${tile(done, 'done')}${tile(missed, 'missed')}${tile(toGo, 'to go')}</div>
-  ${dayPanel(planSel, days.get(planSel), now)}`;
+  ${nextCard(now)}`;
 }
 
 function dayPanel(k, info, now) {
@@ -1121,8 +1131,21 @@ function dayPanel(k, info, now) {
   }
   if (!rows.length) rows.push(`<p class="muted" style="margin:2px 0">Nothing planned.</p>`);
   const canAdd = future && data.schedule.enabled;
-  return `<section class="card day-panel"><h3>${esc(title)}</h3>${rows.join('')}
-    ${canAdd ? `<button class="link" data-act="sheet" data-arg="add:${k}">${ICONS.plus} Add a workout</button>` : ''}</section>`;
+  return `<h2>${esc(title)}</h2><div class="day-sheet">${rows.join('')}</div>
+    <div class="sheet-actions">${canAdd ? `<button class="btn block" data-act="sheet" data-arg="add:${k}">${ICONS.plus} Add a workout</button>` : ''}
+    <button class="btn ghost block" data-act="close">Close</button></div>`;
+}
+
+// Always the next planned workout, whatever date is selected.
+function nextCard(now) {
+  if (!data.schedule.enabled) return '';
+  const n = nextSession(data.schedule.sessions, now.toISOString());
+  if (!n) {
+    return `<section class="card next-card"><h3>Next workout</h3><p class="muted">Nothing planned yet. Check your days and times in ${ICONS.sliders} settings.</p></section>`;
+  }
+  return `<section class="card next-card" id="sess-${n.id}"><h3>Next workout</h3>
+    <div class="row between"><div><b style="font-size:19px">${esc(fmtWhen(n.start))}</b><div class="small muted">${n.minutes} min${n.moved ? ' · moved' : ''}</div></div>
+    <div class="row" style="gap:6px"><button class="chip" data-act="sheet" data-arg="move:${n.id}">Move</button><button class="chip" data-act="sheet" data-arg="skip:${n.id}">Skip</button></div></div></section>`;
 }
 
 function selectDay(iso) {
@@ -1173,7 +1196,7 @@ function renderPlanSettings() {
   <section class="card">
     <h3>When you can train</h3>
     <div class="q"><span class="q-label small muted">Workouts per week</span><div class="chips">${[1, 2, 3, 4, 5].map(per).join('')}</div></div>
-    <div class="q"><span class="q-label small muted">Days</span><div class="chips">${[1, 2, 3, 4, 5, 6, 0].map(day).join('')}</div></div>
+    <div class="q"><span class="q-label small muted">Days</span><div class="chips">${[0, 1, 2, 3, 4, 5, 6].map(day).join('')}</div></div>
     <div class="q" style="margin-bottom:0"><span class="q-label small muted">Time window</span>
       <div class="row"><select class="select" data-plan="from">${timeOptions(p.from)}</select><span class="muted">to</span><select class="select" data-plan="to">${timeOptions(p.to)}</select></div></div>
   </section>
@@ -1315,7 +1338,7 @@ const sheets = {
   busy() {
     return `<h2>Add a busy time</h2><p class="muted small">Workouts will never be scheduled during this.</p>
       <label class="q" style="display:block;margin-top:12px"><span class="q-label small">Label</span><input type="text" id="busy-label" placeholder="Work, class, gym…" maxlength="30"></label>
-      <div class="q"><span class="q-label small">Days</span><div class="chips" id="busy-days">${[1, 2, 3, 4, 5, 6, 0].map((n) => `<button class="chip" data-act="busy-day" data-arg="${n}" aria-pressed="${n >= 1 && n <= 5}">${DAY_SHORT[n]}</button>`).join('')}</div></div>
+      <div class="q"><span class="q-label small">Days</span><div class="chips" id="busy-days">${[0, 1, 2, 3, 4, 5, 6].map((n) => `<button class="chip" data-act="busy-day" data-arg="${n}" aria-pressed="${n >= 1 && n <= 5}">${DAY_SHORT[n]}</button>`).join('')}</div></div>
       <div class="q"><span class="q-label small">Time</span><div class="row"><select class="select" id="busy-from">${timeOptions('09:00')}</select><span class="muted">to</span><select class="select" id="busy-to">${timeOptions('17:00')}</select></div></div>
       <div class="sheet-actions"><button class="btn primary block" data-act="busy-add">Add busy time</button><button class="btn ghost block" data-act="close">Cancel</button></div>`;
   },
@@ -1497,7 +1520,11 @@ const actions = {
     if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'center' }); }
     openSheet(sheets.move(id));
   },
-  'cal-day'(k) { planSel = k; render(); document.querySelector('.day-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); },
+  'cal-day'(k) {
+    planSel = k;
+    render();
+    openSheet(dayPanel(k, calendarDays().get(k), new Date()));
+  },
   'cal-month'(n) {
     const base = planMonth ?? new Date();
     planMonth = new Date(base.getFullYear(), base.getMonth() + Number(n), 1);
@@ -1548,7 +1575,7 @@ const actions = {
     const [k, v] = arg.split(':');
     data.profile[k] = k === 'defaultMinutes' ? (Number(v) || null) : Number(v);
     persist(); render();
-    if (k === 'workoutsPerWeek' || k === 'defaultMinutes') replan();
+    if (k === 'workoutsPerWeek') { rescheduleUpcoming(); render(); } else if (k === 'defaultMinutes') replan();
   },
   async export() {
     const json = store.exportJson(data);
@@ -1568,7 +1595,7 @@ const actions = {
     const n = Number(arg);
     const days = data.schedule.prefs.days;
     data.schedule.prefs.days = days.includes(n) ? days.filter((x) => x !== n) : [...days, n].sort();
-    replan(); render();
+    rescheduleUpcoming(); render();
   },
   'move-to'(arg) {
     const [id, iso] = arg.split('|');
@@ -1596,9 +1623,9 @@ const actions = {
     const to = document.getElementById('busy-to').value;
     if (!days.length) return toast('Pick at least one day.');
     data.schedule.busy.push({ id: uid(), label: document.getElementById('busy-label').value.trim().slice(0, 30), days, from, to });
-    persist(); closeSheet(); replan(); render();
+    persist(); closeSheet(); rescheduleUpcoming(); render();
   },
-  'busy-del'(arg) { data.schedule.busy = data.schedule.busy.filter((b) => b.id !== arg); persist(); replan(); render(); },
+  'busy-del'(arg) { data.schedule.busy = data.schedule.busy.filter((b) => b.id !== arg); persist(); rescheduleUpcoming(); render(); },
   gconnect() {
     const id = document.getElementById('g-client')?.value.trim() ?? '';
     data.schedule.google.clientId = id;
@@ -1663,7 +1690,7 @@ document.addEventListener('change', async (e) => {
   if (t.dataset?.plan) {
     data.schedule.prefs[t.dataset.plan] = t.value;
     if (hm(data.schedule.prefs.to) - hm(data.schedule.prefs.from) < 30) toast('The time window needs to be at least 30 minutes.');
-    persist(); replan(); render();
+    persist(); rescheduleUpcoming(); render();
   }
   if (t.id === 'import-file' && t.files?.[0]) {
     try {
