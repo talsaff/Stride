@@ -385,7 +385,7 @@ function renderToday() {
     : d.mode === 'easy' ? '<span class="badge">Easy day · 3.5–4.5 km/h</span>'
       : d.effectiveStage !== d.baseline.to ? '<span class="badge">Adjusted for today</span>' : '';
   html += `
-  <section class="card hero">
+  <section class="card hero hero-link" data-act="tab" data-arg="go" role="button" tabindex="0" aria-label="Open the Start screen">
     ${S_WATERMARK}
     <div class="row between wrap"><span class="badge">${w.isRun ? ICONS.run : ICONS.walk} Level ${d.baselineLevel} · ${esc(lvl.name)}</span>${modeBadge}</div>
     <h2 style="margin-top:12px">${esc(d.headline)}</h2>
