@@ -614,15 +614,14 @@ function ringArcs(s) {
   });
 }
 
-// Faint arcs show how the session is built; bright arcs fill in as you go.
+// Only the completed part is drawn; it fills in the plan's colors as you go.
 function sessionRing(s) {
   const arc = ({ start, len, color }, extra) =>
     `<circle cx="60" cy="60" r="54" fill="none" stroke="${color}" stroke-width="6" stroke-dashoffset="${-start}" ${extra}/>`;
   const arcs = ringArcs(s);
   // Round caps (r = half the stroke) at the start of the ring and at the
   // moving front, so the filled line has soft ends while colors meet seamlessly.
-  return arcs.map((a) => arc(a, `stroke-dasharray="${a.len} ${RING_C}" opacity=".32"`)).join('')
-    + arcs.map((a, i) => arc(a, `id="w-arc-${i}" stroke-dasharray="0 ${RING_C}"`)).join('')
+  return arcs.map((a, i) => arc(a, `id="w-arc-${i}" stroke-dasharray="0 ${RING_C}" visibility="hidden"`)).join('')
     + `<circle id="w-cap-start" cx="114" cy="60" r="3" fill="${arcs[0].color}" opacity="0"/><circle id="w-cap-end" cx="114" cy="60" r="3" fill="${arcs[0].color}" opacity="0"/>`;
 }
 
@@ -640,7 +639,8 @@ function updateWorkout() {
   const arcs = ringArcs(s);
   arcs.forEach(({ start, len }, i) => {
     const a = el(`w-arc-${i}`);
-    if (a) a.setAttribute('stroke-dasharray', `${Math.max(0, Math.min(len, doneLen - start))} ${RING_C}`);
+    const shown = Math.max(0, Math.min(len, doneLen - start));
+    if (a) { a.setAttribute('stroke-dasharray', `${shown} ${RING_C}`); a.setAttribute('visibility', doneLen > 0.3 && shown > 0 ? 'visible' : 'hidden'); }
   });
   const capStart = el('w-cap-start'), capEnd = el('w-cap-end');
   if (capStart && capEnd) {
