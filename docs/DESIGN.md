@@ -85,12 +85,14 @@ goal, weekly schedule) and editable any time from Settings → Runner profile. I
 
 `config.js` defines an 80-stage ladder (8 levels × 10 stages). **Stage 1, the easiest normal
 workout:** 25 min, warm-up 3.5 km/h, easy 4.5 / brisk 5.5 km/h walking, 2 min fast walk at 6 km/h,
-recovery and cool-down. Each next stage changes exactly one thing, in a repeating cycle:
+recovery and cool-down. **All speeds are multiples of 0.5 km/h** (many treadmills only step in
+0.5s). Each next stage changes exactly one thing, in a repeating 10-step cycle:
 
-1. +1 minute (up to 45)
-2. +0.1 km/h on the walking parts (up to +1.0)
-3. +1 fast minute (up to 20, split into blocks of 2-5 min)
-4. +0.2 km/h on the fast parts (cap by preference; at 7 km/h+ fast parts become jogs/runs)
+`+1 min · +1 fast min · +1 min · +1 fast min · fast parts +0.5 km/h · +1 min · +1 fast min · +1 min ·
++1 fast min · walking parts +0.5 km/h`
+
+Caps: 45 min, 20 fast minutes (split into blocks of 2-5 min), walking +1.0 km/h, fast speed by
+preference. At 7 km/h+ the fast parts become jogs/runs.
 
 **Every completed workout moves the plan one stage up** (two if rated "too easy"). A workout that
 felt too hard holds the plan and makes the next one 2 stages lighter; two in a row step the plan back

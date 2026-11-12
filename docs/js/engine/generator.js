@@ -1,10 +1,11 @@
 // WorkoutGenerator: builds the minute-by-minute schedule for a stage, for the
 // tired-day version and for the advanced version. Deterministic.
 
-import { BASE, EASY_DAY, ADVANCED, LEVELS, GLOBAL_LIMITS, MAX_STAGE, stageParams, clampStage, levelOfStage } from './config.js';
+import { BASE, EASY_DAY, ADVANCED, LEVELS, GLOBAL_LIMITS, MAX_STAGE, stageParams, clampStage, levelOfStage, roundSpeed } from './config.js';
 
 const r1 = (x) => Math.round(x * 10) / 10;
-const seg = (type, minutes, speed, label, cue) => ({ type, minutes, speed: r1(speed), label, cue });
+// Every speed is rounded to the treadmill's 0.5 km/h steps.
+const seg = (type, minutes, speed, label, cue) => ({ type, minutes, speed: roundSpeed(speed), label, cue });
 
 const CUES = {
   warmup: 'Easy start. Loosen up and find your rhythm.',
@@ -111,7 +112,7 @@ export function generateWorkout(stageNo, opts = {}) {
         ...q,
         minutes: Math.min(BASE.maxMinutes + ADVANCED.extraMinutes, q.minutes + ADVANCED.extraMinutes),
         fastMinutes: Math.max(ADVANCED.minRunMinutes, q.fastMinutes),
-        fastSpeed: r1(Math.max(ADVANCED.minRunSpeed, q.fastSpeed + ADVANCED.runSpeedAbovePlan)),
+        fastSpeed: Math.max(ADVANCED.minRunSpeed, q.fastSpeed + ADVANCED.runSpeedAbovePlan),
       };
       level = levelOfStage(Math.min(MAX_STAGE, stage + ADVANCED.stageBoost));
       target = [6, 8];

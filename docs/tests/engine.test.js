@@ -42,7 +42,23 @@ describe('the plan', () => {
       assert.ok(changed.length <= 1, `stage ${s}: ${changed}`);
       if (b.minutes !== a.minutes) assert.equal(b.minutes - a.minutes, 1);
       if (b.fastMinutes !== a.fastMinutes) assert.equal(b.fastMinutes - a.fastMinutes, 1);
-      if (b.fastSpeed !== a.fastSpeed) assert.ok(b.fastSpeed - a.fastSpeed <= 0.21);
+      if (b.fastSpeed !== a.fastSpeed) assert.equal(b.fastSpeed - a.fastSpeed, 0.5);
+      if (b.easySpeed !== a.easySpeed) assert.equal(b.easySpeed - a.easySpeed, 0.5);
+    }
+  });
+
+  test('every speed is a multiple of 0.5 km/h (treadmill steps)', () => {
+    for (const pref of ['walk', 'mix', 'run']) {
+      for (const mode of ['normal', 'easy', 'advanced']) {
+        for (const speedFactor of [1, 1.03, 1.07, 1.12]) {
+          for (let s = 1; s <= MAX_STAGE; s++) {
+            for (const targetMinutes of [null, 10]) {
+              const w = generateWorkout(s, { preference: pref, mode, speedFactor, targetMinutes, extraEasyMinutes: 5 });
+              for (const x of w.segments) assert.equal(x.speed * 2, Math.round(x.speed * 2), `${pref} ${mode} stage ${s}: ${x.label} ${x.speed}`);
+            }
+          }
+        }
+      }
     }
   });
 
