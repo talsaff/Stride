@@ -577,8 +577,7 @@ function renderWorkout() {
       <span class="muted small" id="w-total"></span>
     </div>
     <div class="ring-wrap">
-      <svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="54" fill="none" stroke-width="9"/>
-      <circle id="w-ring" class="ring-fg" cx="60" cy="60" r="54" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="339.3" stroke-dashoffset="0"/></svg>
+      <svg viewBox="0 0 120 120">${sessionRing(s)}</svg>
       <div class="ring-center">
         <div class="seg-title">${esc(seg.label)}</div>
         <div class="clock" id="w-clock">0:00</div>
@@ -599,6 +598,31 @@ function renderWorkout() {
   </section>`;
 }
 
+// ---------- session ring: the whole workout around the clock
+
+const RING_C = 2 * Math.PI * 54;
+const RING_GAP = 2.2;
+const RING_COLORS = { warmup: '#A8D0F5', steady: '#BFEBDD', recovery: '#BFEBDD', brisk: '#8FDCC0', work: '#FF8A5B', run: '#FF6B3D', cooldown: '#D3C8F2' };
+
+function ringArcs(s) {
+  const total = s.segments.reduce((a, x) => a + x.minutes, 0);
+  let at = 0;
+  return s.segments.map((x) => {
+    const start = (at / total) * RING_C;
+    at += x.minutes;
+    return { start, len: Math.max(0.5, (x.minutes / total) * RING_C - RING_GAP), color: RING_COLORS[x.type] ?? '#fff' };
+  });
+}
+
+// Faint arcs show how the session is built; bright arcs fill in as you go.
+function sessionRing(s) {
+  const arc = ({ start, len, color }, extra) =>
+    `<circle cx="60" cy="60" r="54" fill="none" stroke="${color}" stroke-width="6" stroke-dashoffset="${-start}" ${extra}/>`;
+  const arcs = ringArcs(s);
+  return arcs.map((a) => arc(a, `stroke-dasharray="${a.len} ${RING_C}" opacity=".32"`)).join('')
+    + arcs.map((a, i) => arc(a, `id="w-arc-${i}" stroke-dasharray="0 ${RING_C}"`)).join('');
+}
+
 function updateWorkout() {
   const s = data.activeSession;
   if (!s) return;
@@ -608,7 +632,12 @@ function updateWorkout() {
   const doneMs = s.segments.slice(0, s.index).reduce((a, x) => a + x.minutes * 60000, 0) + s.segElapsedMs;
   const el = (id) => document.getElementById(id);
   if (el('w-clock')) el('w-clock').textContent = clock(segMs - s.segElapsedMs);
-  if (el('w-ring')) el('w-ring').style.strokeDashoffset = String(339.3 * (s.segElapsedMs / segMs));
+  // Fill each step's arc up to how far the whole session has got.
+  const doneLen = (doneMs / planned) * RING_C;
+  ringArcs(s).forEach(({ start, len }, i) => {
+    const a = el(`w-arc-${i}`);
+    if (a) a.setAttribute('stroke-dasharray', `${Math.max(0, Math.min(len, doneLen - start))} ${RING_C}`);
+  });
   if (el('w-progress')) el('w-progress').style.width = `${Math.min(100, (doneMs / planned) * 100)}%`;
   if (el('w-total')) el('w-total').textContent = `${clock(planned - doneMs)} left`;
 }
