@@ -352,7 +352,6 @@ const fmtWhen = (iso) => {
 
 function renderToday() {
   const d = currentDecision();
-  const r = readiness();
   const done = completedWorkouts(data.history);
   const monthCount = done.filter((w) => Date.now() - new Date(w.date) < 30 * 864e5).length;
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -370,7 +369,6 @@ function renderToday() {
   }
 
   html += scheduleCards();
-  html += readinessCard(r);
 
   if (d.status !== 'ok') {
     html += `
@@ -402,11 +400,7 @@ function renderToday() {
     <button class="btn white lg block" style="margin-top:16px" data-act="start"><span class="play">${ICONS.play}</span> Start workout</button>
   </section>
 
-  <div class="actions">
-    ${actionBtn('easier', 'leaf', 'Tired today', d.mode === 'easy')}
-    ${actionBtn('advanced', 'bolt', 'Advanced', d.mode === 'advanced')}
-    ${actionBtn('shorten', 'clock', data.state.shortenTo ? `${data.state.shortenTo} min only` : 'Shorten', !!data.state.shortenTo)}
-  </div>
+  <button class="link small" style="display:block;margin:-4px auto 8px;font-size:14px" data-act="tab" data-arg="go">Tired, strong or short on time? Adjust in Start ›</button>
 
   <section class="card">
     <h3>The plan · effort ${w.targetExertion[0]}–${w.targetExertion[1]} out of 10</h3>
@@ -500,19 +494,6 @@ function segRow(s) {
 
 function actionBtn(act, icon, label, on, disabled = false) {
   return `<button class="action ${on ? 'on' : ''}" data-act="${act}" ${disabled ? 'aria-disabled="true"' : ''} aria-pressed="${on}">${ICONS[icon]}<span>${esc(label)}</span></button>`;
-}
-
-// One quick question, once a day, and only once there is a last workout to
-// recover from. It disappears as soon as it is answered. Energy is handled by
-// the Tired today / Advanced buttons instead.
-function readinessCard(r) {
-  if (r.recoveryAnswered || completedWorkouts(data.history).length === 0) return '';
-  const chip = (val, label) => `<button class="chip" data-act="recovery" data-arg="${val}">${label}</button>`;
-  return `
-  <section class="card">
-    <h3>How did you recover from last time?</h3>
-    <div class="chips">${chip('poor', 'Still tired')}${chip('normal', 'Okay')}${chip('good', 'Fresh')}</div>
-  </section>`;
 }
 
 function todayLinks() {
