@@ -117,12 +117,12 @@ function render() {
 
 function renderTabs() {
   const tab = (id, icon, label) =>
-    `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
+    `<button data-act="tab" data-arg="${id}" ${view === id || (id === 'progress' && view === 'medals') ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
   // The middle tab is the raised green Start button.
   const go = `<button class="tab-go" data-act="tab" data-arg="go" aria-label="Start a workout" ${view === 'go' ? 'aria-current="page"' : ''}>
     <span class="tab-go-circle"><svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('#fff', 'transparent', '#FF8A5B')}</svg></span><span>Start</span></button>`;
   $tabs.innerHTML = tab('today', 'home', 'Today') + tab('plan', 'calendar', 'Plan') + go
-    + tab('medals', 'medal', 'Medals') + tab('progress', 'chart', 'Progress');
+    + tab('progress', 'chart', 'Progress') + tab('settings', 'user', 'Profile');
 }
 
 // ---------- runner profile wizard
@@ -355,10 +355,9 @@ function renderToday() {
   const done = completedWorkouts(data.history);
   const monthCount = done.filter((w) => Date.now() - new Date(w.date) < 30 * 864e5).length;
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  const initial = (data.profile.name || '?').trim().charAt(0).toUpperCase() || '?';
 
   let html = `
-  <div class="brandrow">${wordmark(28)}<button class="avatar" data-act="profile" aria-label="Runner profile">${esc(initial)}</button></div>
+  <div class="brandrow">${wordmark(28)}</div>
   <header class="topbar">
     <div><div class="eyebrow">${esc(dateStr)}</div><h1 class="title">${greeting()}</h1>
     <p class="subtitle">${done.length === 0 ? 'Ready for your first workout?' : monthCount ? `${plural(monthCount, 'workout')} in the last 30 days. Keep it up.` : 'Welcome back. Your progress is right where you left it.'}</p></div>
@@ -452,7 +451,7 @@ function renderGo() {
   const r = readiness();
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   const name = data.profile.name ? `, ${esc(data.profile.name)}` : '';
-  const head = `<div class="go-top">${wordmark(26)}<span class="row" style="gap:10px">${esc(dateStr)}${gearBtn('', true)}</span></div>`;
+  const head = `<div class="go-top">${wordmark(26)}<span>${esc(dateStr)}</span></div>`;
   if (d.status !== 'ok') {
     return `<section class="go">${head}<div class="go-hello">${greeting().replace(/,.*/, '')}${name}</div>
       <div class="go-title">${esc(d.headline)}</div><p class="go-note">${esc(d.explanation[0])}</p></section>`;
@@ -793,7 +792,8 @@ function renderProgress() {
   const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
 
   return `
-  <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div>${gearBtn()}</header>
+  <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div></header>
+  ${medalsCard()}
   <div class="tiles">
     ${tile(done.length, done.length === 1 ? 'Workout' : 'Workouts')}
     ${tile(mins, 'Minutes moved')}
@@ -819,6 +819,17 @@ function renderProgress() {
   ${insights.length ? `<section class="card soft"><h3>What I'm learning about you</h3><ul class="why">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
   ${items.length ? `<section class="card"><h3>History</h3>${items.map(histItem).join('')}</section>` : ''}
   ${missed.length ? `<p class="small muted" style="text-align:center">${plural(missed.length, 'missed session')} logged. Missing sessions never erases progress.</p>` : ''}`;
+}
+
+// Medals entry point on the Progress tab: latest earned medals + count.
+function medalsCard() {
+  const r = evaluateMedals(data.history, data.profile, nowIso());
+  const earned = r.medals.filter((m) => m.earned).sort((a, b) => new Date(b.earnedAt) - new Date(a.earnedAt));
+  const shelf = earned.slice(0, 5).map((m) => `<span class="shelf-medal" title="${esc(m.title)}">${m.emoji}</span>`).join('')
+    || '<span class="small muted">Finish your first workout to earn one.</span>';
+  return `<button class="card medals-card" data-act="tab" data-arg="medals">
+    <div class="row between"><div><h3 style="margin:0">Medals</h3><div class="small muted">${r.earnedCount} of ${r.medals.length} collected</div></div><span class="chev">${ICONS.chev}</span></div>
+    <div class="shelf">${shelf}</div></button>`;
 }
 
 const tile = (num, label) => `<div class="tile"><div class="tile-num">${esc(num)}</div><div class="tile-label">${esc(label)}</div></div>`;
@@ -879,7 +890,7 @@ function renderSettings() {
     ? `${p.workoutsPerWeek}× a week · ${sch.prefs.days.map((d) => DAY_SHORT[d]).join(', ') || 'no days'} · ${sch.prefs.from}–${sch.prefs.to}`
     : 'Off';
   return `
-  <header class="topbar"><div><div class="eyebrow">Make it yours</div><h1 class="title">Settings</h1></div></header>
+  <header class="topbar"><div><div class="eyebrow">Profile & settings</div><h1 class="title">${esc(p.name || 'You')}</h1></div><span class="avatar">${esc((p.name || '?').charAt(0).toUpperCase())}</span></header>
   ${section('profile', 'user', 'Runner profile', [p.name, p.age && `${p.age}`, PREFERENCE[effectivePreference(p)], GOALS[p.goal]].filter(Boolean).join(' · '), profileBody)}
   ${section('level', 'sliders', 'Program level', `Level ${level} · ${LEVELS[level].name}`, levelOptions())}
   ${section('schedule', 'calendar', 'Schedule', schedSummary, `<div class="acc-cards">${scheduleSettings()}</div>`)}
@@ -890,10 +901,6 @@ function renderSettings() {
   <div style="text-align:center;margin:18px 0 6px;opacity:.85">${wordmark(28)}</div>
   <p class="small muted" style="text-align:center;margin:0 20px 10px">Version ${ALGORITHM_VERSION}</p>`;
 }
-
-// ⚙︎ button for the top right of every tab.
-const gearBtn = (sectionId = '', light = false) =>
-  `<button class="icon-btn gear ${light ? 'light' : ''}" data-act="open-settings" data-arg="${sectionId}" aria-label="Settings">${ICONS.gear}</button>`;
 
 function levelOptions() {
   const cur = levelOfStage(data.state.baselineStage);
@@ -1107,7 +1114,7 @@ function renderPlan() {
   const monthName = planMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   return `
   <header class="topbar"><div><div class="eyebrow">Your month</div><h1 class="title">Plan</h1></div>
-    ${gearBtn('schedule')}</header>
+</header>
   ${data.schedule.enabled ? '' : `<section class="card soft"><b>Scheduling is off.</b><p class="small muted" style="margin:4px 0 10px">Turn it on and Stride books your workouts into free slots.</p><button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`}
   <section class="card cal">
     <div class="cal-head"><button data-act="cal-month" data-arg="-1" aria-label="Previous month">‹</button><b>${esc(monthName)}</b><button data-act="cal-month" data-arg="1" aria-label="Next month">›</button></div>
@@ -1157,7 +1164,7 @@ function nextCard(now) {
   if (!data.schedule.enabled) return '';
   const n = nextSession(data.schedule.sessions, now.toISOString());
   if (!n) {
-    return `<section class="card next-card"><h3>Next workout</h3><p class="muted">Nothing planned yet. Check your days and times in ${ICONS.sliders} settings.</p></section>`;
+    return `<section class="card next-card"><h3>Next workout</h3><p class="muted">Nothing planned yet. Check your days and times in Profile › Schedule.</p></section>`;
   }
   return `<section class="card next-card" id="sess-${n.id}"><h3>Next workout</h3>
     <div class="row between"><div><b style="font-size:19px">${esc(fmtWhen(n.start))}</b><div class="small muted">${n.minutes} min${n.moved ? ' · moved' : ''}</div></div>
@@ -1238,8 +1245,9 @@ function renderMedals() {
         : m.group !== 'special' ? `<div class="progress sm"><span style="width:${Math.round(m.progress * 100)}%"></span></div>` : ''}
     </div>`;
   return `
+  <button class="back" data-act="tab" data-arg="progress">‹ Progress</button>
   <header class="topbar"><div><div class="eyebrow">Trophy case</div><h1 class="title">Medals</h1>
-    <p class="subtitle">${r.earnedCount} of ${r.medals.length} collected</p></div>${gearBtn()}</header>
+    <p class="subtitle">${r.earnedCount} of ${r.medals.length} collected</p></div></header>
   <div class="tiles">
     ${tile(r.workouts, r.workouts === 1 ? 'Workout' : 'Workouts')}
     ${tile(r.totalKm, 'Kilometres')}

@@ -569,3 +569,9 @@ body.go-mode .active .unwell { color: #FFC2AE; }
 .gear.light { background: rgba(255,255,255,.14); color: #fff; width: 36px; height: 36px; border-radius: 12px; }
 .gear.light svg { width: 18px; height: 18px; }
 .acc-cards .chip:not([aria-pressed="true"]), .acc-cards .select { background: var(--surface); }
+
+/* ---------- medals entry on Progress ---------- */
+.medals-card { display: block; width: 100%; text-align: left; }
+.medals-card .chev svg { width: 18px; height: 18px; color: var(--muted); }
+.shelf { display: flex; gap: 10px; margin-top: 12px; align-items: center; min-height: 44px; }
+.shelf-medal { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; font-size: 24px; }
