@@ -1,6 +1,6 @@
-// Offline support: cache the app shell, serve it cache-first, refresh in the
-// background. Bump VERSION whenever app files change.
-const VERSION = 'stride-v13';
+// Offline support. Online: always fetch the latest files (network first) and
+// keep a copy. Offline: serve the copy. Bump VERSION when app files change.
+const VERSION = 'stride-v14';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/icons.js', 'js/storage.js', 'js/google.js', 'js/push.js',
@@ -25,17 +25,18 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
-  // Always fetch the push config fresh (it changes when the push service is deployed).
-  if (new URL(e.request.url).pathname.endsWith('/push-config.json')) return;
-  e.respondWith(
-    caches.open(VERSION).then(async (cache) => {
+  e.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    try {
+      // Revalidate with the server so updates show up right away.
+      const res = await fetch(e.request, { cache: 'no-cache' });
+      if (res.ok) cache.put(e.request, res.clone());
+      return res;
+    } catch {
       const cached = await cache.match(e.request, { ignoreSearch: true });
-      const network = fetch(e.request)
-        .then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || network;
-    }),
-  );
+      return cached || Response.error();
+    }
+  })());
 });
 
 // ---------------------------------------------------------------- push reminders
