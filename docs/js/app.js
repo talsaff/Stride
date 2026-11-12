@@ -601,7 +601,7 @@ function renderWorkout() {
 // ---------- session ring: the whole workout around the clock
 
 const RING_C = 2 * Math.PI * 54;
-const RING_GAP = 2.2;
+const RING_GAP = 0;
 const RING_COLORS = { warmup: '#A8D0F5', steady: '#BFEBDD', recovery: '#BFEBDD', brisk: '#8FDCC0', work: '#FF8A5B', run: '#FF6B3D', cooldown: '#D3C8F2' };
 
 function ringArcs(s) {
@@ -610,7 +610,7 @@ function ringArcs(s) {
   return s.segments.map((x) => {
     const start = (at / total) * RING_C;
     at += x.minutes;
-    return { start, len: Math.max(0.5, (x.minutes / total) * RING_C - RING_GAP), color: RING_COLORS[x.type] ?? '#fff' };
+    return { start, len: (x.minutes / total) * RING_C - RING_GAP, color: RING_COLORS[x.type] ?? '#fff' };
   });
 }
 
@@ -619,8 +619,11 @@ function sessionRing(s) {
   const arc = ({ start, len, color }, extra) =>
     `<circle cx="60" cy="60" r="54" fill="none" stroke="${color}" stroke-width="6" stroke-dashoffset="${-start}" ${extra}/>`;
   const arcs = ringArcs(s);
+  // Round caps (r = half the stroke) at the start of the ring and at the
+  // moving front, so the filled line has soft ends while colors meet seamlessly.
   return arcs.map((a) => arc(a, `stroke-dasharray="${a.len} ${RING_C}" opacity=".32"`)).join('')
-    + arcs.map((a, i) => arc(a, `id="w-arc-${i}" stroke-dasharray="0 ${RING_C}"`)).join('');
+    + arcs.map((a, i) => arc(a, `id="w-arc-${i}" stroke-dasharray="0 ${RING_C}"`)).join('')
+    + `<circle id="w-cap-start" cx="114" cy="60" r="3" fill="${arcs[0].color}" opacity="0"/><circle id="w-cap-end" cx="114" cy="60" r="3" fill="${arcs[0].color}" opacity="0"/>`;
 }
 
 function updateWorkout() {
@@ -634,10 +637,22 @@ function updateWorkout() {
   if (el('w-clock')) el('w-clock').textContent = clock(segMs - s.segElapsedMs);
   // Fill each step's arc up to how far the whole session has got.
   const doneLen = (doneMs / planned) * RING_C;
-  ringArcs(s).forEach(({ start, len }, i) => {
+  const arcs = ringArcs(s);
+  arcs.forEach(({ start, len }, i) => {
     const a = el(`w-arc-${i}`);
     if (a) a.setAttribute('stroke-dasharray', `${Math.max(0, Math.min(len, doneLen - start))} ${RING_C}`);
   });
+  const capStart = el('w-cap-start'), capEnd = el('w-cap-end');
+  if (capStart && capEnd) {
+    const shown = doneLen > 0.3 ? '1' : '0';
+    const head = arcs.find((a) => doneLen <= a.start + a.len) ?? arcs[arcs.length - 1];
+    const ang = Math.min(doneLen, RING_C) / 54;
+    capStart.setAttribute('opacity', shown);
+    capEnd.setAttribute('opacity', shown);
+    capEnd.setAttribute('cx', String(60 + 54 * Math.cos(ang)));
+    capEnd.setAttribute('cy', String(60 + 54 * Math.sin(ang)));
+    capEnd.setAttribute('fill', head.color);
+  }
   if (el('w-progress')) el('w-progress').style.width = `${Math.min(100, (doneMs / planned) * 100)}%`;
   if (el('w-total')) el('w-total').textContent = `${clock(planned - doneMs)} left`;
 }
