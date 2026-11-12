@@ -422,3 +422,62 @@ textarea:focus, input:focus { border-color: var(--primary); }
 .nudge svg { width: 28px; height: 28px; color: var(--accent); }
 .action.on { background: var(--accent-soft); color: var(--accent); }
 .action.on svg { color: var(--accent); }
+
+/* ---------- middle tab: raised green Start button ---------- */
+.tabbar { overflow: visible; align-items: flex-end; }
+.tabbar .tab-go { position: relative; color: var(--primary); font-weight: 750; }
+.tab-go-circle {
+  display: grid; place-items: center;
+  width: 66px; height: 66px; margin-top: -34px; margin-bottom: 2px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #27A582 0%, #1E8A6E 60%, #146B55 100%);
+  border: 5px solid var(--bg);
+  box-shadow: 0 6px 18px rgba(30, 138, 110, .45);
+  transition: transform .12s ease;
+}
+.tabbar .tab-go .tab-go-circle svg { width: 36px; height: 36px; color: #fff; }
+.tabbar .tab-go:active .tab-go-circle { transform: scale(.94); }
+.tabbar .tab-go[aria-current="page"] { color: var(--accent); }
+.tabbar .tab-go[aria-current="page"] .tab-go-circle { box-shadow: 0 0 0 3px #FF8A5B, 0 6px 18px rgba(30, 138, 110, .45); }
+
+/* ---------- big start screen ---------- */
+body.go-mode { background: radial-gradient(120% 70% at 50% 28%, #24A07F 0%, #0F4D3E 72%) fixed, #0F4D3E; }
+body.go-mode .tabbar { background: color-mix(in srgb, #0F4D3E 85%, transparent); border-top-color: rgba(255,255,255,.08); }
+body.go-mode .tabbar button { color: rgba(255,255,255,.7); }
+body.go-mode .tabbar button[aria-current="page"] { color: #FF8A5B; }
+body.go-mode .tab-go-circle { border-color: #0F4D3E; }
+.go { color: #fff; text-align: center; padding-bottom: 46px; }
+.go-top { display: flex; justify-content: space-between; align-items: center; margin: 0 2px; font-size: 14px; opacity: .9; }
+.go-top .wordmark span { color: #fff; }
+.go-hello { margin-top: 12px; font-size: 15px; opacity: .85; }
+.go-title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px; }
+.go-note { margin: 16px 10px; opacity: .9; }
+.go-ask { margin: 12px auto 0; background: rgba(255,255,255,.1); border-radius: 18px; padding: 10px 12px; font-size: 14px; }
+.go-ask div { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+.go-ask button { background: rgba(255,255,255,.16); color: #fff; border-radius: 99px; padding: 8px 14px; font-weight: 650; font-size: 14px; }
+.go-ring {
+  width: min(52vw, 204px, 27dvh); aspect-ratio: 1; margin: 14px auto 0; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(255,255,255,.08); box-shadow: 0 0 0 12px rgba(255,255,255,.04);
+}
+.go-btn {
+  width: 82%; aspect-ratio: 1; border-radius: 50%; background: #FF8A5B; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 18px 40px rgba(0,0,0,.3); transition: transform .1s ease;
+}
+.go-btn:active { transform: scale(.96); }
+.go-btn svg { width: 40px; height: 40px; }
+.go-btn b { font-size: 22px; font-weight: 900; letter-spacing: .08em; margin-top: 6px; }
+.go-btn span { font-size: 14px; opacity: .95; }
+.go-strip { display: flex; gap: 3px; height: 10px; margin: 18px 4px 0; }
+.go-strip span { border-radius: 5px; }
+.go-legend { display: flex; justify-content: space-between; margin: 8px 4px 0; font-size: 12px; opacity: .85; }
+.go-opts { display: flex; justify-content: center; gap: 26px; margin-top: 16px; }
+.go-opt { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: #fff; }
+.go-opt span { width: 58px; height: 58px; border-radius: 50%; background: rgba(255,255,255,.14); display: grid; place-items: center; }
+.go-opt span svg { width: 24px; height: 24px; }
+.go-opt.on span { background: #FF8A5B; }
+.go-more { color: #fff; opacity: .85; margin-top: 10px; font-size: 14px; padding: 8px; }
+.go-plan { background: rgba(255,255,255,.1); border-radius: 18px; padding: 4px 14px; margin-top: 6px; text-align: left; }
+.go-plan li { border-top-color: rgba(255,255,255,.12); }
+.go-plan .seg-meta, .go-plan .seg-meta b { color: #fff; }
+.go-planbtn { display: block; width: 100%; color: #fff; padding: 0; }
+.go-plan { margin: 12px 0 0; }

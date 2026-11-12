@@ -104,10 +104,11 @@ function render() {
   if (view !== lastView) { window.scrollTo(0, 0); lastView = view; }
   const full = view === 'workout' || view === 'checkin' || view === 'wizard';
   $app.classList.toggle('fullscreen', full);
+  document.body.classList.toggle('go-mode', view === 'go');
   $tabs.hidden = full;
   if (!full) renderTabs();
   const fn = {
-    wizard: renderWizard, today: renderToday, workout: renderWorkout, checkin: renderCheckin,
+    wizard: renderWizard, today: renderToday, go: renderGo, workout: renderWorkout, checkin: renderCheckin,
     plan: renderPlan, medals: renderMedals, progress: renderProgress, settings: renderSettings,
   }[view];
   $app.innerHTML = fn();
@@ -117,8 +118,11 @@ function render() {
 function renderTabs() {
   const tab = (id, icon, label) =>
     `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
-  $tabs.innerHTML = tab('today', 'mark', 'Today') + tab('plan', 'calendar', 'Plan') + tab('medals', 'medal', 'Medals')
-    + tab('progress', 'chart', 'Progress') + tab('settings', 'gear', 'Settings');
+  // The middle tab is the raised green Start button.
+  const go = `<button class="tab-go" data-act="tab" data-arg="go" aria-label="Start a workout" ${view === 'go' ? 'aria-current="page"' : ''}>
+    <span class="tab-go-circle"><svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('#fff', 'transparent', '#FF8A5B')}</svg></span><span>Start</span></button>`;
+  $tabs.innerHTML = tab('today', 'home', 'Today') + tab('plan', 'calendar', 'Plan') + go
+    + tab('medals', 'medal', 'Medals') + tab('progress', 'chart', 'Progress');
 }
 
 // ---------- runner profile wizard
@@ -445,6 +449,48 @@ function scheduleCards() {
       </div></section>`;
   }
   return html;
+}
+
+// ---------- big start (middle tab)
+
+let goShowPlan = false;
+
+function renderGo() {
+  const d = currentDecision();
+  const r = readiness();
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const name = data.profile.name ? `, ${esc(data.profile.name)}` : '';
+  const head = `<div class="go-top">${wordmark(26)}<span>${esc(dateStr)}</span></div>`;
+  if (d.status !== 'ok') {
+    return `<section class="go">${head}<div class="go-hello">${greeting().replace(/,.*/, '')}${name}</div>
+      <div class="go-title">${esc(d.headline)}</div><p class="go-note">${esc(d.explanation[0])}</p></section>`;
+  }
+  const w = d.workout;
+  const fastSeg = w.segments.find((x) => x.type === 'work' || x.type === 'run');
+  const fastText = w.runMinutes ? `${w.runMinutes} min running at ${fmtSpeed(fastSeg.speed)}`
+    : w.fastMinutes ? `${w.fastMinutes} min fast at ${fmtSpeed(fastSeg.speed)}` : `easy, up to ${fmtSpeed(w.topSpeed)}`;
+  const askRecovery = !r.recoveryAnswered && completedWorkouts(data.history).length > 0;
+  const round = (act, icon, label, on) => `<button class="go-opt ${on ? 'on' : ''}" data-act="${act}" aria-pressed="${on}"><span>${ICONS[icon]}</span>${label}</button>`;
+  return `
+  <section class="go">
+    ${head}
+    <div class="go-hello">${greeting().replace(/,.*/, '')}${name}</div>
+    <div class="go-title">${d.mode === 'advanced' ? 'Advanced: let\'s run' : d.mode === 'easy' ? 'Easy day today' : 'Your workout is ready'}</div>
+    ${askRecovery ? `<div class="go-ask"><span>Recovered from last time?</span><div>
+      <button data-act="recovery" data-arg="poor">Still tired</button><button data-act="recovery" data-arg="normal">Okay</button><button data-act="recovery" data-arg="good">Fresh</button></div></div>` : ''}
+    <div class="go-ring"><button class="go-btn" data-act="start" aria-label="Start workout">
+      ${ICONS.play}<b>START</b><span>${w.totalMinutes} min · ${w.distanceKm.toFixed(1)} km</span></button></div>
+    <button class="go-planbtn" data-act="go-plan" aria-expanded="${goShowPlan}" aria-label="Show the full plan">
+      <div class="go-strip">${w.segments.map((x) => `<span class="tl-${x.type}" style="flex:${x.minutes}"></span>`).join('')}</div>
+      <div class="go-legend"><span>${fmtSpeed(w.segments[0].speed)} km/h</span><span>${esc(fastText)} ${goShowPlan ? '⌃' : '⌄'}</span><span>${fmtSpeed(w.segments.at(-1).speed)}</span></div>
+    </button>
+    ${goShowPlan ? `<ul class="segments go-plan">${w.segments.map(segRow).join('')}</ul>` : ''}
+    <div class="go-opts">
+      ${round('easier', 'leaf', 'Tired', d.mode === 'easy')}
+      ${round('advanced', 'bolt', 'Advanced', d.mode === 'advanced')}
+      ${round('shorten', 'clock', data.state.shortenTo ? `${data.state.shortenTo} min` : 'Shorten', !!data.state.shortenTo)}
+    </div>
+  </section>`;
 }
 
 function segRow(s) {
@@ -1333,6 +1379,7 @@ const actions = {
     window.scrollTo(0, y);
   },
   'save-checkin'() { saveCheckin(); },
+  'go-plan'() { goShowPlan = !goShowPlan; render(); },
   discard() {
     data.activeSession = null;
     data.state.tempAdjustment = 'none';
