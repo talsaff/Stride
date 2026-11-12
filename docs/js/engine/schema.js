@@ -35,7 +35,7 @@ export const REST_SYMPTOMS = {
   palpitations: 'Racing or irregular heartbeat',
 };
 
-export const TEMP_ADJUSTMENTS = ['none', 'easier', 'harder'];
+export const TEMP_ADJUSTMENTS = ['none', 'easier', 'advanced'];
 
 export function defaultProfile() {
   return {

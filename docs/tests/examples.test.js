@@ -6,68 +6,32 @@ import assert from 'node:assert/strict';
 import { decide } from '../js/engine/engine.js';
 import { ok, easy, hard, missed, input, workout } from './helpers.js';
 
+const runMin = (w) => w.segments.filter((s) => s.type === 'run').reduce((a, s) => a + s.minutes, 0);
+
 const examples = [
-  {
-    name: 'A. Brand-new user',
-    inp: input(),
-    expect: { stage: 1, minutes: 13, action: 'maintain', headline: /workout for today/ },
-  },
-  {
-    name: 'B. Two comfortable weeks at level 2 (1x/week)',
-    inp: input({ stage: 4, history: [easy(14, 4), easy(7, 4)] }),
-    expect: { stage: 5, minutes: 19, action: 'increase' },
-  },
-  {
-    name: 'C. One tough day after steady progress',
-    inp: input({ stage: 7, history: [ok(12, 7), ok(6, 7), hard(2, 7)] }),
-    expect: { stage: 6, minutes: 19, action: 'maintain', baselineTo: 7 },
-  },
-  {
-    name: 'D. Two tough workouts in a row',
-    inp: input({ stage: 9, history: [hard(8, 9), hard(4, 9)] }),
-    expect: { stage: 8, minutes: 19, action: 'decrease', baselineTo: 8 },
-  },
-  {
-    name: 'E. Busy month: three sessions missed for time, last walk 20 days ago',
-    inp: input({ stage: 6, history: [ok(20, 6), missed(13, 'time'), missed(9, 'time'), missed(2, 'motivation')] }),
-    expect: { stage: 5, minutes: 19, action: 'maintain', baselineTo: 6 },
-  },
-  {
-    name: 'F. Six weeks off',
-    inp: input({ stage: 8, history: [ok(45, 8)] }),
-    expect: { stage: 5, minutes: 15, action: 'maintain', baselineTo: 8 },
-  },
-  {
-    name: 'G. Low energy today',
-    inp: input({ stage: 6, history: [ok(4, 6)], readiness: { energy: 'low' } }),
-    expect: { stage: 4, minutes: 15, action: 'maintain', baselineTo: 6 },
-  },
-  {
-    name: 'H. Feels great, asks for harder, but slept badly (poor recovery)',
-    inp: input({ stage: 6, history: [ok(4, 6)], readiness: { recovery: 'poor', energy: 'high' }, request: { temp: 'harder' } }),
-    expect: { stage: 5, action: 'maintain', baselineTo: 6 },
-  },
-  {
-    name: 'I. Chest pain reported',
-    inp: input({ stage: 6, history: [ok(4, 6)], readiness: { symptoms: ['chest_pain'] } }),
-    expect: { status: 'urgent' },
-  },
-  {
-    name: 'J. Shortened twice for time (neutral), otherwise fine',
-    inp: input({ stage: 5, history: [workout({ ago: 9, stage: 5, endedEarly: true, reason: 'time', completedWork: 1 }), workout({ ago: 2, stage: 5, endedEarly: true, reason: 'time', completedWork: 1 })] }),
-    expect: { stage: 5, minutes: 19, action: 'maintain' },
-  },
+  { name: 'A. Brand-new user', inp: input(), expect: { stage: 1, minutes: 25, mode: 'normal', action: 'maintain' } },
+  { name: 'B. Did the first workout, felt about right', inp: input({ stage: 1, history: [ok(3, 1)] }), expect: { stage: 2, minutes: 26, action: 'increase' } },
+  { name: 'C. Rated the last one "too easy"', inp: input({ stage: 10, history: [easy(3, 10)] }), expect: { stage: 12, action: 'increase' } },
+  { name: 'D. One tough day', inp: input({ stage: 20, history: [ok(9, 20), hard(2, 20)] }), expect: { stage: 18, action: 'maintain', baselineTo: 20 } },
+  { name: 'E. Two tough days in a row', inp: input({ stage: 30, history: [hard(6, 30), hard(2, 30)] }), expect: { action: 'decrease' } },
+  { name: 'F. Tired today', inp: input({ stage: 20, history: [ok(4, 20)], readiness: { energy: 'low' } }), expect: { mode: 'easy', minutes: 25, maxSpeed: 4.5 } },
+  { name: 'G. Full of energy: advanced', inp: input({ stage: 20, history: [ok(4, 20)], request: { temp: 'advanced' } }), expect: { mode: 'advanced', minRun: 3 } },
+  { name: 'H. Three weeks off', inp: input({ stage: 20, history: [ok(21, 20), missed(10, 'time')] }), expect: { stage: 17, baselineTo: 21 } },  // the workout before the break still counts as a step
+  { name: 'I. Two months off', inp: input({ stage: 40, history: [ok(60, 40)] }), expect: { stage: 32, minutes: 25, baselineTo: 42 } },  // ...and it felt easy for that level
+  { name: 'J. Cut short for time twice', inp: input({ stage: 15, history: [workout({ ago: 9, stage: 15, endedEarly: true, reason: 'time', completedWork: 0 }), workout({ ago: 2, stage: 15, endedEarly: true, reason: 'time', completedWork: 0 })] }), expect: { stage: 15, action: 'maintain' } },
 ];
 
 for (const ex of examples) {
   test(ex.name, () => {
     const d = decide(ex.inp);
-    if (ex.expect.status) { assert.equal(d.status, ex.expect.status); return; }
+    const e = ex.expect;
     assert.equal(d.status, 'ok');
-    assert.equal(d.effectiveStage, ex.expect.stage, 'stage');
-    if (ex.expect.minutes) assert.equal(d.workout.totalMinutes, ex.expect.minutes, 'minutes');
-    assert.equal(d.baseline.action, ex.expect.action, 'action');
-    if (ex.expect.baselineTo) assert.equal(d.baseline.to, ex.expect.baselineTo, 'baseline');
-    if (ex.expect.headline) assert.match(d.headline, ex.expect.headline);
+    if (e.stage) assert.equal(d.effectiveStage, e.stage, 'stage');
+    if (e.minutes) assert.equal(d.workout.totalMinutes, e.minutes, 'minutes');
+    if (e.mode) assert.equal(d.mode, e.mode, 'mode');
+    if (e.action) assert.equal(d.baseline.action, e.action, 'action');
+    if (e.baselineTo) assert.equal(d.baseline.to, e.baselineTo, 'baseline');
+    if (e.maxSpeed) assert.ok(d.workout.segments.every((s) => s.speed <= e.maxSpeed));
+    if (e.minRun) assert.ok(runMin(d.workout) >= e.minRun);
   });
 }

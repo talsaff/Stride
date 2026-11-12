@@ -11,12 +11,12 @@
 //   7. Fitting the workout into the time available (WorkoutGenerator)
 // Reductions from different reasons do not stack: the most conservative wins.
 
-import { ALGORITHM_VERSION, RULES, MAX_STAGE, clampStage, levelOfStage } from './config.js';
+import { ALGORITHM_VERSION, RULES, clampStage, levelOfStage } from './config.js';
 import { assessReadiness } from './readiness.js';
-import { evaluateSafety, clampWorkout, maxStageAllowed } from './safety.js';
+import { evaluateSafety, clampWorkout } from './safety.js';
 import { evaluateProgression } from './progression.js';
 import { generateWorkout, workoutDistance } from './generator.js';
-import { speedFactor, goalOptions } from './profile.js';
+import { speedFactor, goalOptions, effectivePreference } from './profile.js';
 import { classifyWorkout } from './feedback.js';
 import { lastCompleted, completedWorkouts } from './history.js';
 import { makeWorkoutRecord } from './schema.js';
@@ -58,7 +58,8 @@ function returnPlan(assessment, history, baseline) {
 }
 
 export function decide({ profile, state, history, readiness, request = {}, now }) {
-  const temp = request.temp ?? state.tempAdjustment ?? 'none';
+  let temp = request.temp ?? state.tempAdjustment ?? 'none';
+  if (temp === 'harder') temp = 'advanced';           // older saved state
   const shortenTo = request.shortenTo ?? state.shortenTo ?? null;
   const assessment = assessReadiness({ readiness, history, now });
   const safety = evaluateSafety(assessment);
@@ -72,96 +73,61 @@ export function decide({ profile, state, history, readiness, request = {}, now }
     request: { temp, shortenTo },
   };
 
-  // 1. Safety and contraindications
   if (safety.status !== 'ok') {
     return {
       ...base,
       status: safety.status,
       code: safety.status === 'urgent' ? 'stop_urgent' : 'rest',
       headline: safety.status === 'urgent' ? 'Please do not exercise today' : 'Rest day recommended',
-      explanation: [safety.notes[0], 'Resting for your health is never a failure, and it does not erase your progress.'],
+      explanation: [safety.notes[0], 'Resting is never a failure, and it does not erase your progress.'],
       baseline: { from: state.baselineStage, to: state.baselineStage, changed: false, action: 'maintain' },
-      workout: null, harderAllowed: false, progressionAllowed: false,
+      workout: null, advancedAllowed: false, harderAllowed: false, progressionAllowed: false,
     };
   }
 
-  // 5-6. Performance-based baseline evaluation (applied below in priority order)
+  // Long-term plan: one tiny step per completed workout.
   const prog = evaluateProgression({ state, history, safety, profile });
   const baseline = prog.to;
   if (prog.action !== 'maintain') modifiers.push(prog.action);
 
-  const reductions = []; // {stage, why, source}
-  // 2. Current symptoms and recovery
-  if (safety.pauseProgression) {
-    reductions.push({ stage: baseline - RULES.poorRecoveryStageDrop, why: safety.notes[0], source: 'recovery' });
-  }
-  // 3. Return to training
-  const ret = assessment.returnCategory === 'first' ? null : returnPlan(assessment, history, baseline);
-  if (ret) reductions.push({ ...ret, source: 'return' });
-  const priorityReduced = reductions.length > 0;
-
-  // 4. Temporary preference
-  const autoEasier = temp === 'none' && assessment.energy === 'low' && profile.autoEasierOnLowEnergy;
-  if (temp === 'easier' || autoEasier) {
-    reductions.push({
-      stage: baseline - RULES.easierStageDrop, source: 'easier',
-      why: autoEasier
-        ? 'You said your energy is low, so today is lighter. This is a one-off: your program level does not change.'
-        : 'You asked for an easier day. This is a one-off: your program level does not change.',
-    });
-  }
-  // 5. Recent performance (one hard session, or a session missed because it was too hard)
-  const missedHard = assessment.missedSinceLast.some((m) => m.reason === 'too_difficult');
-  if ((prog.afterHard || missedHard) && temp !== 'harder') {
-    reductions.push({
-      stage: baseline - RULES.afterHardStageDrop, source: 'after_hard',
-      why: prog.afterHard ? prog.reason : 'You skipped a session because it felt too hard, so today is a little lighter. Your level is unchanged.',
-    });
-  }
-
+  // Stage for today: lower after a break or a hard session (most conservative wins).
   let effective = baseline;
   let maxMinutes = null;
-  for (const r of reductions) {
-    if (r.stage < effective) effective = r.stage;
-    if (r.maxMinutes != null) maxMinutes = r.maxMinutes;
-    explanation.push(r.why);
-    modifiers.push(r.source);
+  const ret = assessment.returnCategory === 'first' ? null : returnPlan(assessment, history, baseline);
+  if (ret) {
+    effective = Math.min(effective, ret.stage);
+    if (ret.maxMinutes != null) maxMinutes = ret.maxMinutes;
+    explanation.push(ret.why);
+    modifiers.push('return');
+  }
+  const missedHard = assessment.missedSinceLast.some((m) => m.reason === 'too_difficult');
+  if (prog.afterHard || missedHard) {
+    effective = Math.min(effective, baseline - RULES.afterHardStageDrop);
+    explanation.push(prog.afterHard ? prog.reason : 'You skipped a session because it felt too hard, so today is a little lighter. The plan holds.');
+    modifiers.push('after_hard');
   }
   effective = clampStage(effective);
 
-  // 4b. Harder request: modest, and never over safety, recovery or a return
-  let harderAllowed = !(safety.blockHarder || priorityReduced || assessment.energy === 'low');
-  let harderBlockedReason = null;
-  if (!harderAllowed) {
-    harderBlockedReason = safety.blockHarder
-      ? 'Recovery comes first today, so a harder workout is not available.'
-      : priorityReduced
-        ? 'You are easing back in after a break, so today stays gentle.'
-        : 'You said your energy is low today, so a harder workout is not offered.';
+  // Today's version: normal, easy (tired / poor recovery) or advanced (high energy).
+  const autoEasier = temp === 'none' && assessment.energy === 'low' && profile.autoEasierOnLowEnergy;
+  let mode = 'normal';
+  if (temp === 'advanced') {
+    mode = 'advanced';
+    explanation.push('Advanced workout: a harder session with real running, for today only. Your plan does not change.');
+    modifiers.push('advanced');
+  } else if (temp === 'easier' || autoEasier || safety.pauseProgression) {
+    mode = 'easy';
+    explanation.push(temp === 'easier'
+      ? 'Easy version for a tired day: everything between 3.5 and 4.5 km/h. Your plan does not change.'
+      : autoEasier
+        ? 'Your energy is low, so today is the easy version (3.5-4.5 km/h). Your plan does not change.'
+        : `${safety.notes[0]} Today is the easy version (3.5-4.5 km/h).`);
+    modifiers.push(safety.pauseProgression && temp !== 'easier' && !autoEasier ? 'recovery' : 'easier');
   }
-  const cap = maxStageAllowed(profile);
-  if (effective + RULES.harderStageRise > Math.min(cap, MAX_STAGE)) {
-    if (harderAllowed) harderBlockedReason = effective >= MAX_STAGE
-      ? 'This is already the hardest workout in the program.'
-      : 'This is already the top of your program. Switch to running in your profile to go further.';
-    harderAllowed = false;
-  }
-  if (temp === 'harder') {
-    if (harderAllowed) {
-      effective = clampStage(effective + RULES.harderStageRise);
-      explanation.push('You are feeling good, so today has a small extra challenge. This is a one-off: your program level does not change.');
-      modifiers.push('harder');
-    } else {
-      explanation.push(`You asked for a harder workout, but: ${harderBlockedReason}`);
-      modifiers.push('harder_refused');
-    }
-  }
-  effective = Math.min(effective, cap);
 
-  // 6. Long-term progression explanation
   if (prog.action !== 'maintain' || explanation.length === 0) explanation.unshift(prog.reason);
 
-  // 7. Fit into the time available
+  // Fit into the time available.
   let targetMinutes = null;
   if (profile.defaultMinutes) targetMinutes = profile.defaultMinutes;
   if (maxMinutes != null) targetMinutes = Math.min(targetMinutes ?? maxMinutes, maxMinutes);
@@ -170,24 +136,24 @@ export function decide({ profile, state, history, readiness, request = {}, now }
     explanation.push(`Shortened to about ${shortenTo} minutes for today. Every minute counts.`);
     modifiers.push('shortened');
   }
-  const easier = reductions.some((r) => r.source === 'easier' || r.source === 'recovery');
   const goal = goalOptions(profile);
   const raw = generateWorkout(effective, {
-    targetMinutes, easier, speedFactor: speedFactor(profile),
-    extraEasyMinutes: shortenTo || maxMinutes != null || easier ? 0 : goal.extraEasyMinutes ?? 0,
+    mode, targetMinutes, speedFactor: speedFactor(profile), preference: effectivePreference(profile),
+    extraEasyMinutes: shortenTo || maxMinutes != null ? 0 : goal.extraEasyMinutes ?? 0,
     capMinutes: goal.capMinutes ?? null,
   });
-  const workout = clampWorkout(raw, raw.level);
+  const workout = clampWorkout(raw);
   if (!shortenTo && targetMinutes && workout.totalMinutes < workout.naturalMinutes) {
     explanation.push(`Fitted to your preferred ${targetMinutes}-minute session.`);
   }
 
-  const appliedTemp = modifiers.includes('harder') ? 'harder' : (modifiers.includes('easier') ? 'easier' : 'none');
+  const appliedTemp = mode === 'advanced' ? 'advanced' : mode === 'easy' ? 'easier' : 'none';
   return {
     ...base,
     status: 'ok',
     code: prog.action,
     modifiers,
+    mode,
     headline: headlineFor(prog.action, modifiers),
     explanation,
     baseline: { from: state.baselineStage, to: baseline, changed: baseline !== state.baselineStage, action: prog.action, reason: prog.reason },
@@ -198,20 +164,20 @@ export function decide({ profile, state, history, readiness, request = {}, now }
     returnRamp: !!ret,
     afterHard: prog.afterHard,
     progressionAllowed: !safety.pauseProgression,
-    harderAllowed,
-    harderBlockedReason,
+    advancedAllowed: true,
+    harderAllowed: true,
+    harderBlockedReason: null,
     workout,
   };
 }
 
 function headlineFor(action, modifiers) {
-  if (modifiers.includes('return')) return 'Welcome back: an easy return';
-  if (modifiers.includes('recovery')) return 'A gentle day for recovery';
-  if (modifiers.includes('easier')) return 'A lighter one today';
-  if (modifiers.includes('harder')) return 'A little extra today';
-  if (action === 'increase') return 'Small step up today';
-  if (action === 'decrease') return 'Resetting to a comfortable base';
-  if (modifiers.includes('after_hard')) return 'Taking it a bit easier today';
+  if (modifiers.includes('advanced')) return 'Advanced mode: let\'s run';
+  if (modifiers.includes('return')) return 'Welcome back!';
+  if (modifiers.includes('recovery') || modifiers.includes('easier')) return 'Easy day';
+  if (action === 'decrease') return 'Stepping back to rebuild';
+  if (modifiers.includes('after_hard')) return 'A bit lighter today';
+  if (action === 'increase') return 'One step harder';
   return 'Your workout for today';
 }
 

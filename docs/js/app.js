@@ -4,7 +4,10 @@
 import * as store from './storage.js';
 import * as gcal from './google.js';
 import * as push from './push.js';
-import { ICONS, logoMark, wordmark } from './icons.js';
+import { ICONS, logoMark, wordmark, S_PATH } from './icons.js';
+
+// Brand motif: the runner's angular S, used as a watermark on hero cards.
+const S_WATERMARK = `<svg class="hero-s" viewBox="30 13 53 89" aria-hidden="true"><path d="${S_PATH}" fill="none" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 import { decide, commitDecision, recordWorkout } from './engine/engine.js';
 import { applyPermanentChange } from './engine/progression.js';
 import { assessReadiness } from './engine/readiness.js';
@@ -92,7 +95,7 @@ function isStandalone() {
   return window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 }
 
-const segColor = (t) => (t === 'work' || t === 'run' ? 'var(--accent)' : t === 'warmup' ? 'var(--warm)' : t === 'cooldown' ? 'var(--cool)' : 'var(--primary)');
+const segColor = (t) => (t === 'work' || t === 'run' ? 'var(--accent)' : t === 'warmup' ? 'var(--warm)' : t === 'cooldown' ? 'var(--cool)' : t === 'brisk' ? 'var(--brisk)' : 'var(--primary)');
 
 // ---------------------------------------------------------------- render
 
@@ -113,8 +116,8 @@ function render() {
 
 function renderTabs() {
   const tab = (id, icon, label) =>
-    `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${ICONS[icon]}<span>${label}</span></button>`;
-  $tabs.innerHTML = tab('today', 'home', 'Today') + tab('plan', 'calendar', 'Plan') + tab('medals', 'medal', 'Medals')
+    `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
+  $tabs.innerHTML = tab('today', 'mark', 'Today') + tab('plan', 'calendar', 'Plan') + tab('medals', 'medal', 'Medals')
     + tab('progress', 'chart', 'Progress') + tab('settings', 'gear', 'Settings');
 }
 
@@ -241,11 +244,12 @@ function renderWizard() {
       const steady = w?.segments.find((s) => s.type === 'steady' || s.type === 'recovery');
       return `${head('All set', wiz.mode === 'new' ? `Here's your plan${d.name ? `, ${esc(d.name)}` : ''}` : 'Your updated plan')}
         <section class="card hero">
+          ${S_WATERMARK}
           <span class="badge">Level ${levelOfStage(keepStage)} · ${esc(LEVELS[levelOfStage(keepStage)].name)}</span>
           <div class="stats">
             <div><div class="stat-num">${w ? w.totalMinutes : '–'}<span style="font-size:18px"> min</span></div><div class="stat-label">First workout</div></div>
             ${steady ? `<div><div class="stat-num">${fmtSpeed(steady.speed)}</div><div class="stat-label">Easy km/h</div></div>` : ''}
-            ${fast ? `<div><div class="stat-num">${fmtSpeed(fast.speed)}</div><div class="stat-label">${fast.type === 'run' ? 'Jog' : 'Brisk'} km/h</div></div>` : ''}
+            ${fast ? `<div><div class="stat-num">${fmtSpeed(fast.speed)}</div><div class="stat-label">${fast.type === 'run' ? 'Run' : 'Fast walk'} km/h</div></div>` : ''}
           </div>
         </section>
         <section class="card"><h3>Tailored to you</h3><ul class="why">${profileSummary(p).map((x) => `<li>${esc(x)}</li>`).join('')}
@@ -351,10 +355,10 @@ function renderToday() {
   const initial = (data.profile.name || '?').trim().charAt(0).toUpperCase() || '?';
 
   let html = `
+  <div class="brandrow">${wordmark(28)}<button class="avatar" data-act="profile" aria-label="Runner profile">${esc(initial)}</button></div>
   <header class="topbar">
     <div><div class="eyebrow">${esc(dateStr)}</div><h1 class="title">${greeting()}</h1>
     <p class="subtitle">${done.length === 0 ? 'Ready for your first workout?' : monthCount ? `${plural(monthCount, 'workout')} in the last 30 days. Keep it up.` : 'Welcome back. Your progress is right where you left it.'}</p></div>
-    <button class="avatar" data-act="profile" aria-label="Runner profile">${esc(initial)}</button>
   </header>`;
 
   if (!isStandalone() && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
@@ -375,24 +379,30 @@ function renderToday() {
 
   const w = d.workout;
   const lvl = LEVELS[d.baselineLevel];
-  const fastLabel = w.isRun ? (w.workIntervals === 1 ? 'Jog' : 'Jogs') : (w.workIntervals === 1 ? 'Brisk bit' : 'Brisk bits');
+  const modeBadge = d.mode === 'advanced' ? '<span class="badge hot">Advanced · today only</span>'
+    : d.mode === 'easy' ? '<span class="badge">Easy day · 3.5–4.5 km/h</span>'
+      : d.effectiveStage !== d.baseline.to ? '<span class="badge">Adjusted for today</span>' : '';
+  const energyHigh = r.energy === 'high' && d.mode !== 'advanced';
   html += `
   <section class="card hero">
-    <div class="row between wrap"><span class="badge">${w.isRun ? ICONS.run : ICONS.walk} Level ${d.baselineLevel} · ${esc(lvl.name)}</span>
-    ${d.effectiveStage !== d.baseline.to ? '<span class="badge">Adjusted for today</span>' : ''}</div>
+    ${S_WATERMARK}
+    <div class="row between wrap"><span class="badge">${w.isRun ? ICONS.run : ICONS.walk} Level ${d.baselineLevel} · ${esc(lvl.name)}</span>${modeBadge}</div>
     <h2 style="margin-top:12px">${esc(d.headline)}</h2>
     <div class="stats">
-      <div><div class="stat-num">${w.totalMinutes}<span style="font-size:18px"> min</span></div><div class="stat-label">Total time</div></div>
-      <div><div class="stat-num">${w.distanceKm}<span style="font-size:18px"> km</span></div><div class="stat-label">About</div></div>
-      ${w.workIntervals ? `<div><div class="stat-num">${w.workIntervals}</div><div class="stat-label">${fastLabel}</div></div>` : ''}
+      <div><div class="stat-num">${w.totalMinutes}<span class="unit"> min</span></div><div class="stat-label">Total</div></div>
+      <div><div class="stat-num">${w.distanceKm.toFixed(1)}<span class="unit"> km</span></div><div class="stat-label">About</div></div>
+      ${w.runMinutes ? `<div><div class="stat-num">${w.runMinutes}<span class="unit"> min</span></div><div class="stat-label">Running</div></div>`
+        : w.fastMinutes ? `<div><div class="stat-num">${w.fastMinutes}<span class="unit"> min</span></div><div class="stat-label">Fast walk</div></div>` : ''}
+      <div><div class="stat-num">${fmtSpeed(w.topSpeed)}</div><div class="stat-label">Top km/h</div></div>
     </div>
     <div class="timeline" aria-hidden="true">${w.segments.map((s) => `<span class="tl-${s.type}" style="flex:${s.minutes}"></span>`).join('')}</div>
-    <button class="btn white lg block" style="margin-top:16px" data-act="start">${ICONS.play} Start workout</button>
+    <button class="btn white lg block" style="margin-top:16px" data-act="start"><span class="play">${ICONS.play}</span> Start workout</button>
   </section>
 
+  ${energyHigh ? `<button class="card nudge" data-act="advanced">${ICONS.bolt}<span><b>Feeling strong today?</b><br><span class="small">Swap in the advanced workout with real running. Today only.</span></span></button>` : ''}
   <div class="actions">
-    ${actionBtn('easier', 'leaf', 'Low energy today', d.tempApplied === 'easier')}
-    ${actionBtn('harder', 'bolt', 'Make it harder', d.tempApplied === 'harder', !d.harderAllowed)}
+    ${actionBtn('easier', 'leaf', 'Tired today', d.mode === 'easy')}
+    ${actionBtn('advanced', 'bolt', 'Advanced', d.mode === 'advanced')}
     ${actionBtn('shorten', 'clock', data.state.shortenTo ? `${data.state.shortenTo} min only` : 'Shorten', !!data.state.shortenTo)}
   </div>
 
@@ -602,7 +612,7 @@ function slowDown() {
   const step = RULES.slowDownStep;
   for (let i = s.index; i < s.segments.length; i++) {
     const x = s.segments[i];
-    const same = isWork ? x.type === seg.type : (x.type === 'steady' || x.type === 'recovery' || i === s.index);
+    const same = isWork ? x.type === seg.type : (['steady', 'brisk', 'recovery'].includes(x.type) || i === s.index);
     if (same) x.speed = Math.max(GLOBAL_LIMITS.minSpeed, Math.round((x.speed - step) * 10) / 10);
   }
   s.slowed = true;
@@ -838,11 +848,10 @@ function renderSettings() {
 
 function levelOptions() {
   const cur = levelOfStage(data.state.baselineStage);
-  const top = levelOfStage(maxStage(data.profile));
   return Array.from({ length: LEVEL_COUNT }, (_, i) => i + 1).map((l) => `
-    <button class="level-opt" data-act="level" data-arg="${l}" aria-pressed="${l === cur}" ${l > top ? 'aria-disabled="true"' : ''}>
+    <button class="level-opt" data-act="level" data-arg="${l}" aria-pressed="${l === cur}">
       <span class="level-num">${l}</span>
-      <span><b>${esc(LEVELS[l].name)}</b><br><span class="small muted">${esc(LEVELS[l].description)} ~${LEVELS[l].totalMinutes[0]}–${LEVELS[l].totalMinutes[1]} min${l > top ? ' · needs running in your profile' : ''}</span></span>
+      <span><b>${esc(LEVELS[l].name)}</b><br><span class="small muted">${esc(LEVELS[l].description)}</span></span>
     </button>`).join('');
 }
 
@@ -1261,27 +1270,25 @@ const actions = {
   easier() {
     const d = currentDecision();
     if (d.tempApplied === 'easier' && data.state.tempAdjustment !== 'easier') {
-      return toast('Today is lighter because your energy is low. Change your energy above to undo.');
+      return toast('Today is the easy version because your energy is low. Change your energy above to undo.');
     }
     data.state.tempAdjustment = data.state.tempAdjustment === 'easier' ? 'none' : 'easier';
     persist(); render();
-    if (data.state.tempAdjustment === 'easier') toast('Lighter workout for today only. Your program level stays the same.');
+    if (data.state.tempAdjustment === 'easier') toast('Easy version for today (3.5–4.5 km/h). Your plan stays the same.');
   },
-  harder() {
-    if (data.state.tempAdjustment === 'harder') { data.state.tempAdjustment = 'none'; persist(); return render(); }
-    const d = currentDecision({ temp: 'harder' });
-    if (!d.harderAllowed) return toast(d.harderBlockedReason ?? 'A harder workout is not available today.', 4500);
-    data.state.tempAdjustment = 'harder';
+  advanced() {
+    if (['advanced', 'harder'].includes(data.state.tempAdjustment)) { data.state.tempAdjustment = 'none'; persist(); return render(); }
+    data.state.tempAdjustment = 'advanced';
     persist(); render();
-    toast('A little extra for today only. Ease off any time.');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('Advanced workout loaded: real running today. Your plan stays the same.', 4500);
   },
   shorten() { openSheet(sheets.shorten()); },
   'shorten-to'(arg) {
     data.state.shortenTo = Number(arg) || null;
     persist(); closeSheet(); render();
   },
-  level(arg, el) {
-    if (el?.getAttribute('aria-disabled') === 'true') return toast('That level includes running. Edit your runner profile and pick running (or both) first.', 4500);
+  level(arg) {
     changeLevel(Number(arg));
   },
   missed(arg) {

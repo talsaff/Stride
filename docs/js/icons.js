@@ -7,7 +7,7 @@ const s = (d, extra = '') =>
 // `bg` paints the small gap where the back leg passes behind the body, so it
 // must match whatever the mark sits on.
 export const S_COLOR = '#FF8A5B';        // the special S color (change here)
-const S_PATH = 'M60 27 L 44 45 L 69 61 L 50 88';
+export const S_PATH = 'M60 27 L 44 45 L 69 61 L 50 88';
 
 export function logoMark(fg, bg, sColor = S_COLOR) {
   const st = (c, w) => `style="stroke:${c}" stroke-width="${w}"`;

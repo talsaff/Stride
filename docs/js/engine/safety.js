@@ -1,8 +1,7 @@
 // SafetyGuard: recovery-based limits and hard caps on every generated workout.
 // Recovery always overrides progression and requests for harder workouts.
 
-import { LEVELS, GLOBAL_LIMITS } from './config.js';
-import { maxStage } from './profile.js';
+import { GLOBAL_LIMITS, MAX_STAGE } from './config.js';
 
 export const URGENT_MESSAGE =
   'Chest pain, fainting or severe shortness of breath: stop and get medical help right away.';
@@ -13,8 +12,8 @@ export const REST_MESSAGE =
 export const FATIGUE_MESSAGE =
   'You have felt wiped out a few times recently, so progression is paused until you are recovered.';
 
-export function maxStageAllowed(profile) {
-  return maxStage(profile);
+export function maxStageAllowed() {
+  return MAX_STAGE;
 }
 
 export function evaluateSafety(assessment) {
@@ -46,26 +45,18 @@ export function evaluateSafety(assessment) {
 
 const round1 = (x) => Math.round(x * 10) / 10;
 
-// Enforce level limits (scaled by the profile speed factor) and global
-// limits. Returns a new workout plus the corrections made (normally none).
-export function clampWorkout(workout, level) {
-  const lim = LEVELS[level];
-  const f = workout.speedFactor ?? 1;
+// Enforce global limits on a generated workout. Returns a new workout plus
+// the corrections made (normally none).
+export function clampWorkout(workout) {
   const corrections = [];
   const segments = workout.segments.map((seg) => {
     let speed = seg.speed;
-    const fast = seg.type === 'work' || seg.type === 'run';
-    const max = fast
-      ? Math.min(seg.type === 'run' ? GLOBAL_LIMITS.maxRunSpeed : GLOBAL_LIMITS.maxWalkSpeed, round1((lim.briskSpeed ?? lim.comfortSpeed)[1] * f))
-      : Math.min(GLOBAL_LIMITS.maxWalkSpeed, round1(lim.comfortSpeed[1] * f));
+    const max = seg.type === 'run' ? GLOBAL_LIMITS.maxRunSpeed : GLOBAL_LIMITS.maxWalkSpeed;
     if (speed > max) { corrections.push(`${seg.label} speed capped at ${max} km/h`); speed = max; }
     if (speed < GLOBAL_LIMITS.minSpeed) speed = GLOBAL_LIMITS.minSpeed;
     return { ...seg, speed: round1(speed) };
   });
-  const target = [
-    Math.min(workout.targetExertion[0], GLOBAL_LIMITS.maxTargetExertion),
-    Math.min(workout.targetExertion[1], GLOBAL_LIMITS.maxTargetExertion),
-  ];
+  const target = workout.targetExertion.map((x) => Math.min(x, GLOBAL_LIMITS.maxTargetExertion));
   const total = segments.reduce((s, x) => s + x.minutes, 0);
   if (total > GLOBAL_LIMITS.maxTotalMinutes) corrections.push('Duration above the global limit');
   return { ...workout, segments, targetExertion: target, totalMinutes: total, corrections };

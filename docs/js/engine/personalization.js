@@ -5,7 +5,7 @@
 // changes speeds or the baseline itself. As real feedback accumulates, the
 // strongest of these patterns can be promoted into configurable rules.
 
-import { STAGES } from './config.js';
+import { stageChange } from './config.js';
 import { completedWorkouts, missedSessions, totalMinutes } from './history.js';
 import { classifyWorkout, completionRatio } from './feedback.js';
 
@@ -43,7 +43,7 @@ export function personalInsights(history) {
   // Does the user tolerate speed changes or duration/volume changes better?
   const byChange = { speed: [], volume: [] };
   for (const w of done) {
-    const changed = STAGES[w.effective_stage]?.changed ?? '';
+    const changed = stageChange(w.effective_stage ?? 1);
     const c = classifyWorkout(w);
     if (c === 'neutral' || c === 'safety') continue;
     const bucket = /speed/.test(changed) ? 'speed' : 'volume';

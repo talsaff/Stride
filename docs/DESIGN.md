@@ -73,100 +73,64 @@ Built in a wizard on first launch (name, age, gender, height, weight, fitness, w
 goal, weekly schedule) and editable any time from Settings → Runner profile. It changes the plan in
 `profile.js`:
 
-* **Starting level** from fitness × preference, one step gentler from age 45, two more from 60, and
-  one or two gentler for BMI ≥ 30 / ≥ 35.
-* **Speed factor** (0.85–1.12) on every segment: taller → faster, older → gradually slower, higher
-  BMI → slower, fitter → slightly faster. Gender is stored but not used for speeds, since height,
-  weight and age already capture what matters for treadmill pace.
-* **How far the program goes:** walking only (up to stage 15), mix (up to stage 21: run/walk), or
-  running (up to stage 24: continuous running). The "Run 5 km" goal switches on running.
-* **Goal tweak:** weight loss adds 5 easy minutes per workout; habit caps sessions at 25 min.
+* **Starting stage** from fitness (low 1, some 6, regular 14, fit 24), a few stages lower from age 45/60
+  and for BMI ≥ 30/35.
+* **Speed boost** (1.00-1.12) for taller and fitter people. It only ever speeds things up, never
+  below the plan's minimums. Gender is stored but not used for speeds.
+* **Fast-part cap** by preference: walk 6.5 km/h (fast walking, no running in the plan), mix 8.5 km/h,
+  run 10 km/h. The "Run 5 km" goal switches on running.
+* **Goal tweak:** weight loss adds 5 easy minutes per workout; habit caps sessions at 30 min.
 
-## Levels and the progression ladder
+## The plan: a tiny bit harder every workout
 
-Eight levels, each with explicit limits (duration, speeds, interval count, target effort), and a
-24-stage ladder. Levels 1-5 are walking (from 13 min steady walking to 31 min power-walking
-intervals at 4.4 km/h); levels 6-8 add jogs (5 × 1 min at 6.5 km/h) and build to 2 × 13 min runs
-at 7.5 km/h (all before the speed factor). Adjacent stages differ in one thing: duration,
-interval structure, or one speed; a unit test enforces this. Target effort never exceeds 7/10.
+`config.js` defines an 80-stage ladder (8 levels × 10 stages). **Stage 1, the easiest normal
+workout:** 25 min, warm-up 3.5 km/h, easy 4.5 / brisk 5.5 km/h walking, 2 min fast walk at 6 km/h,
+recovery and cool-down. Each next stage changes exactly one thing, in a repeating cycle:
 
-## Decision algorithm (`decide()` in `engine.js`)
+1. +1 minute (up to 45)
+2. +0.1 km/h on the walking parts (up to +1.0)
+3. +1 fast minute (up to 20, split into blocks of 2-5 min)
+4. +0.2 km/h on the fast parts (cap by preference; at 7 km/h+ fast parts become jogs/runs)
+
+**Every completed workout moves the plan one stage up** (two if rated "too easy"). A workout that
+felt too hard holds the plan and makes the next one 2 stages lighter; two in a row step the plan back
+by about 12% of workload. Workouts cut short for time, easy days and back-from-a-break workouts don't
+move it.
+
+**Today-only versions** (never change the plan):
+
+* **Tired / low energy / poor recovery:** 25 min, everything between 3.5 and 4.5 km/h.
+* **Advanced (high energy):** the stage 4 steps ahead, 2 min longer, with all fast parts as running:
+  at least 3 min at ≥ 7 km/h (more running and faster for more advanced plans), even for walkers.
+  Completing it counts as one normal step.
+
+## Decision order (`decide()` in `engine.js`)
 
 ```
-assessment = ReadinessAssessment(readiness, history, now)
-safety     = SafetyGuard(assessment, profile)
-
-1  if red-flag symptom (chest pain, fainting, severe breathlessness) → status 'urgent', no workout
-   if rest symptom (dizziness, significant pain, unexplained severe fatigue, palpitations) → 'rest', no workout
-   if persistent unusual fatigue (≥2 flags in the last 3 check-ins) → pause progression, advise doctor
-   if recovery poor or soreness severe → pause progression, block 'harder'
-
-   prog = ProgressionEngine(state, history)   # only workouts since the last permanent change
-          last 2 non-neutral workouts 'hard'          → decrease baseline ~12% workload
-          last workout 'hard' or safety-stopped       → maintain, one-time −1 stage
-          last 2 workouts AT baseline 'easy' (not on easier days, recovery not poor)
-                 and progression not paused and below the profile's top stage → increase +1 stage
-          otherwise                                    → maintain
-
-   candidates for today (the LOWEST wins; reductions don't stack):
-2    recovery/fatigue pause         → baseline − 1
-3    days since last workout ≤14    → baseline (or the next step of a return ramp)
-                             15–30  → min(baseline, last comfortable stage) − 1   (ramp)
-                             >30    → min(baseline, last comfortable stage) − 3, max 15 min (ramp)
-4    'easier' request or low energy → baseline − 2
-5    one hard workout / skipped as too hard → baseline − 1
-4b   'harder' request → +1 stage, refused if recovery/return ramp/low energy/top of program
-
-7  WorkoutGenerator(stage, minutes = min(shortenTo, defaultMinutes, return cap), profile speed factor, goal tweak)
-   SafetyGuard.clampWorkout(level limits, global limits)
-   return workout + explanation + safety notes + whether progression/harder are allowed
+1  rest / urgent if a red-flag symptom is reported (no workout)
+2  plan step: +1 / +2 / hold / step back (ProgressionEngine)
+3  today's stage: back from a break (15-30 days −3 stages, >30 days −8 and 25 min),
+                  after a hard one −2 (the lowest applies)
+4  today's version: advanced (asked) / easy (asked, low energy, poor recovery) / normal
+5  fit to time: shorten, preferred length, goal cap; never longer than the plan
 ```
-
-**Workout classification** (`classifyWorkout`): `safety` (stopped for symptoms, never a failure),
-`hard` (rated too hard, RPE > target max + 1, talk test failed, or stopped early for difficulty or low energy
-with < 60% done), `neutral` (cut short for time/motivation/other: not a fitness signal), `easy`
-(rated too easy or RPE below target, ≥ 90% done, talk test passed, didn't feel exhausted/unwell),
-otherwise `appropriate`.
-
-**When changes take effect:** a baseline change the engine proposes is committed when the user
-*starts* the workout (`commitDecision`), so just browsing never changes anything. One-time
-adjustments (`tempAdjustment`, `shortenTo`) are cleared when the workout is saved. Permanent
-user changes go through `applyPermanentChange` (lower: always allowed; raise: one level at a
-time, to the gentlest stage of that level, refused when safety/recovery/return ramp/recent hard
-session/clearance say no).
-
-**Return ramp:** after a break the user restarts lower, then moves up one stage per comfortable
-session until back at the unchanged baseline. History and achievements are never reset.
 
 ## Example histories and expected next workouts
 
-These are executable: `tests/examples.test.js`.
+Executable in `tests/examples.test.js`:
 
-| # | History | Next workout | Baseline |
+| # | History | Next workout | Plan |
 |---|---|---|---|
-| A | none | Stage 1, 13 min steady walk | maintain |
-| B | 2 walks at stage 4 rated *too easy*, 1×/week | Stage 5, 19 min | +1 (stage 5) |
-| C | 2 OK walks then 1 *too hard* at stage 7 | Stage 6, 19 min (today only) | stays 7 |
-| D | 2 consecutive *too hard* at stage 9 | Stage 8, 19 min | decrease to 8 (~19% less workload: the nearest lower step on the ladder to the ~12% target) |
-| E | Last walk 20 days ago, 3 sessions missed for time/motivation | Stage 5, 19 min (return ramp) | stays 6 |
-| F | Last walk 45 days ago at stage 8 | Stage 5, capped at 15 min | stays 8 |
-| G | Low energy today at stage 6 | Stage 4, 15 min | stays 6 |
-| H | Asks for harder but recovery is poor | Stage 5 (harder refused) | stays 6 |
-| I | Reports chest pain | No workout, urgent care message | unchanged |
-| J | Two walks cut short for time | Stage 5, unchanged | maintain |
-
-## Heuristics vs. future personalization
-
-* **Heuristic rules (now):** everything in `config.js` (`RULES`, `LEVELS`, `STAGES`, `GLOBAL_LIMITS`).
-  These are conservative starting guesses, **not** medically validated thresholds, and are
-  meant to be tuned from real feedback.
-* **Personalization (future):** `personalization.js` only observes history and reports patterns:
-  typical completed duration, whether misses are about scheduling or workload, whether speed or
-  volume increases are tolerated better, and completion rate. It never changes the plan itself.
-  Patterns that prove reliable can later be promoted into configurable rules, e.g. choosing which
-  variable to progress next.
-* An LLM is not used. If one is added later it should only rephrase the engine's explanation,
-  never set speeds or workloads.
+| A | none | Stage 1, 25 min | stage 1 |
+| B | first workout felt about right | Stage 2, 26 min | +1 |
+| C | rated "too easy" at stage 10 | Stage 12 | +2 |
+| D | one too-hard workout at stage 20 | Stage 18 today | holds at 20 |
+| E | two too-hard in a row at stage 30 | lighter stage | steps back ~12% |
+| F | low energy today | easy version, 3.5-4.5 km/h, 25 min | unchanged |
+| G | asks for advanced | ≥ 3 min running | unchanged |
+| H | last workout 21 days ago | 3 stages lighter today | unchanged (+1 for that last workout) |
+| I | last workout 60 days ago | 8 stages lighter, 25 min | unchanged (+ that workout) |
+| J | two workouts cut short for time | same stage | unchanged |
 
 ## Scheduling and calendars
 

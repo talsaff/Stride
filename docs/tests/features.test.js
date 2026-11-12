@@ -3,67 +3,60 @@ import assert from 'node:assert/strict';
 
 import { decide } from '../js/engine/engine.js';
 import { startingStage, speedFactor, maxStage, effectivePreference, isProfileComplete } from '../js/engine/profile.js';
-import { generateWorkout } from '../js/engine/generator.js';
 import { evaluateMedals, newlyEarned, weeklyStreak } from '../js/engine/medals.js';
 import { planSchedule, conflictsOf, pendingMissed, markDone, nextSession, toICS, funnyLine, eventTitle, FUNNY } from '../js/engine/schedule.js';
-import { LAST_WALKING_STAGE, MAX_STAGE } from '../js/engine/config.js';
+import { MAX_STAGE } from '../js/engine/config.js';
 import { NOW, daysAgo, ok, input } from './helpers.js';
 
 const person = (p) => ({ name: 'Sam', age: 25, gender: 'na', heightCm: 170, weightKg: 70, fitness: 'some', preference: 'walk', goal: 'endurance', ...p });
 
 describe('runner profile shapes the plan', () => {
-  test('starting level follows fitness and preference', () => {
+  test('starting stage follows fitness', () => {
     assert.equal(startingStage(person({ fitness: 'low' })), 1);
-    assert.ok(startingStage(person({ fitness: 'fit', preference: 'run' })) >= 16);
-    assert.ok(startingStage(person({ fitness: 'regular' })) > startingStage(person({ fitness: 'some' })));
+    assert.ok(startingStage(person({ fitness: 'some' })) > 1);
+    assert.ok(startingStage(person({ fitness: 'fit' })) > startingStage(person({ fitness: 'regular' })));
   });
 
-  test('older age and higher BMI start more gently', () => {
+  test('older age and higher BMI start a few steps lower', () => {
     const base = startingStage(person({ fitness: 'regular' }));
     assert.ok(startingStage(person({ fitness: 'regular', age: 62 })) < base);
     assert.ok(startingStage(person({ fitness: 'regular', weightKg: 105 })) < base);
   });
 
-  test('walkers never get running stages; runners can reach the top', () => {
-    assert.equal(maxStage(person({ preference: 'walk' })), LAST_WALKING_STAGE);
-    assert.equal(maxStage(person({ preference: 'run' })), MAX_STAGE);
+  test('every preference can climb the whole plan; the 5K goal means running', () => {
+    assert.equal(maxStage(person({ preference: 'walk' })), MAX_STAGE);
     assert.equal(effectivePreference(person({ preference: 'mix', goal: 'run5k' })), 'run');
-    assert.ok(startingStage(person({ fitness: 'fit', preference: 'walk' })) <= LAST_WALKING_STAGE);
   });
 
-  test('speeds scale with height, age and BMI, within limits', () => {
-    const tall = speedFactor(person({ heightCm: 190 }));
-    const short = speedFactor(person({ heightCm: 150 }));
-    assert.ok(tall > 1 && short < 1);
-    assert.ok(speedFactor(person({ age: 65 })) < speedFactor(person({ age: 25 })));
-    assert.ok(speedFactor(person({ weightKg: 110 })) < speedFactor(person()));
+  test('walkers get fast walks, runners get running', () => {
+    const walk = decide(input({ stage: 40, history: [ok(3, 40)], state: { baselineChangedAt: NOW }, profile: person({ preference: 'walk' }) }));
+    const run = decide(input({ stage: 40, history: [ok(3, 40)], state: { baselineChangedAt: NOW }, profile: person({ preference: 'run' }) }));
+    assert.equal(walk.workout.runMinutes, 0);
+    assert.ok(run.workout.runMinutes > 0);
+    assert.ok(run.workout.topSpeed > walk.workout.topSpeed);
+  });
+
+  test('profile speed boost: taller/fitter go faster, never below the plan', () => {
+    assert.ok(speedFactor(person({ heightCm: 190, fitness: 'fit' })) > 1);
+    assert.equal(speedFactor(person({ heightCm: 150, age: 70, weightKg: 110 })), 1);
     assert.ok(speedFactor(person({ heightCm: 230, fitness: 'fit' })) <= 1.12);
-    assert.ok(speedFactor(person({ heightCm: 120, age: 90, weightKg: 150 })) >= 0.85);
+    const tall = decide(input({ stage: 1, profile: person({ heightCm: 195, fitness: 'fit' }) }));
+    const short = decide(input({ stage: 1, profile: person({ heightCm: 150 }) }));
+    const fastest = (d) => Math.max(...d.workout.segments.map((s) => s.speed));
+    assert.ok(fastest(tall) > fastest(short));
+    assert.ok(fastest(short) >= 6);
   });
 
   test('gender does not change speeds', () => {
     assert.equal(speedFactor(person({ gender: 'female' })), speedFactor(person({ gender: 'male' })));
   });
 
-  test('decide() applies the profile speed factor', () => {
-    const tall = decide(input({ stage: 6, history: [ok(3, 6)], profile: person({ heightCm: 190 }) }));
-    const short = decide(input({ stage: 6, history: [ok(3, 6)], profile: person({ heightCm: 150 }) }));
-    const brisk = (d) => d.workout.segments.find((s) => s.type === 'work').speed;
-    assert.ok(brisk(tall) > brisk(short));
-  });
-
-  test('weight goal adds easy minutes; habit goal keeps sessions short', () => {
-    const w = decide(input({ stage: 9, history: [ok(3, 9)], profile: person({ goal: 'weight' }) }));
-    const e = decide(input({ stage: 9, history: [ok(3, 9)], profile: person({ goal: 'endurance' }) }));
+  test('weight goal adds easy minutes; habit goal caps sessions at 30', () => {
+    const w = decide(input({ stage: 9, history: [ok(3, 9)], state: { baselineChangedAt: NOW }, profile: person({ goal: 'weight' }) }));
+    const e = decide(input({ stage: 9, history: [ok(3, 9)], state: { baselineChangedAt: NOW }, profile: person({ goal: 'endurance' }) }));
     assert.equal(w.workout.totalMinutes, e.workout.totalMinutes + 5);
-    const h = decide(input({ stage: 22, history: [ok(3, 22)], profile: person({ goal: 'habit', preference: 'run' }) }));
-    assert.ok(h.workout.totalMinutes <= 25);
-  });
-
-  test('running stages contain jog intervals', () => {
-    const w = generateWorkout(16);
-    assert.equal(w.isRun, true);
-    assert.equal(w.segments.filter((s) => s.type === 'run').length, 5);
+    const h = decide(input({ stage: 70, history: [ok(3, 70)], state: { baselineChangedAt: NOW }, profile: person({ goal: 'habit' }) }));
+    assert.ok(h.workout.totalMinutes <= 30);
   });
 
   test('profile completeness check', () => {
@@ -77,9 +70,9 @@ describe('medals', () => {
     const r = evaluateMedals([ok(3, 9)], { workoutsPerWeek: 2 }, NOW);
     const ids = r.medals.filter((m) => m.earned).map((m) => m.id);
     assert.ok(ids.includes('w1'));
-    assert.ok(ids.includes('d1'));            // a 23-minute stage-9 walk is ~1.25 km
+    assert.ok(ids.includes('d1'));            // a 27-minute workout is over 2 km
     assert.ok(!ids.includes('d5'));
-    assert.ok(r.totalKm > 1 && r.totalKm < 2);
+    assert.ok(r.totalKm > 1 && r.totalKm < 5);
   });
 
   test('workout count milestones', () => {
