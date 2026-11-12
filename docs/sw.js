@@ -1,9 +1,9 @@
 // Offline support. Online: always fetch the latest files (network first) and
 // keep a copy. Offline: serve the copy. Bump VERSION when app files change.
-const VERSION = 'stride-v28';
+const VERSION = 'stride-v29';
 const FILES = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/icons.js', 'js/storage.js', 'js/google.js', 'js/push.js',
+  'js/app.js', 'js/icons.js', 'js/medalart.js', 'js/storage.js', 'js/google.js', 'js/push.js',
   'js/engine/config.js', 'js/engine/schema.js', 'js/engine/history.js', 'js/engine/feedback.js',
   'js/engine/readiness.js', 'js/engine/safety.js', 'js/engine/generator.js', 'js/engine/progression.js',
   'js/engine/engine.js', 'js/engine/personalization.js', 'js/engine/profile.js',

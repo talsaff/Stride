@@ -18,7 +18,8 @@ import { LEVELS, LEVEL_COUNT, levelOfStage, RULES, ALGORITHM_VERSION, GLOBAL_LIM
 import { REASONS, makeMissedRecord, defaultReadiness } from './engine/schema.js';
 import { completedWorkouts, missedSessions, totalMinutes, weeklyCounts } from './engine/history.js';
 import { FITNESS, PREFERENCE, GOALS, GENDERS, startingStage, speedFactor, maxStage, profileSummary, isProfileComplete, effectivePreference } from './engine/profile.js';
-import { evaluateMedals, newlyEarned, GROUP_TITLES } from './engine/medals.js';
+import { evaluateMedals, newlyEarned, GROUP_TITLES, MEDALS } from './engine/medals.js';
+import { medalSvg } from './medalart.js';
 import {
   DAY_SHORT, defaultSchedule, planSchedule, nextSession, pendingMissed, markDone, findSlot, sessionEnd,
   conflictsOf, funnyLine, eventTitle, eventDescription, toICS, hm, fmtHM, moveSession, addSession,
@@ -445,6 +446,8 @@ function scheduleCards() {
 // ---------- big start (middle tab)
 
 let goShowPlan = false;
+let progTab = 'overview';      // Progress: 'overview' | 'history'
+let newMedalIds = new Set();  // medals to highlight on the medals page
 
 function renderGo() {
   const d = currentDecision();
@@ -749,7 +752,7 @@ function saveCheckin() {
   persist();
   view = 'today';
   render();
-  if (fresh.length) setTimeout(() => openSheet(sheets.medal(fresh)), 600);
+  if (fresh.length) setTimeout(() => celebrate(fresh), 500);
   if (data.schedule.enabled) replan({ silent: true });
   else pushSync();
   window.scrollTo(0, 0);
@@ -769,67 +772,71 @@ function renderProgress() {
   const done = completedWorkouts(data.history);
   const missed = missedSessions(data.history);
   const weeks = weeklyCounts(data.history, new Date(), 8);
-  const recent4 = weeks.slice(-4).reduce((a, b) => a + b, 0);
   const mins = Math.round(totalMinutes(data.history));
   const { insights } = personalInsights(data.history);
   const level = levelOfStage(data.state.baselineStage);
+  const r = evaluateMedals(data.history, data.profile, nowIso());
 
   const comfortable = done.filter((w) => ['easy', 'appropriate'].includes(classifyWorkout(w)));
   const best = comfortable.reduce((b, w) => (!b || w.actual_duration > b.actual_duration ||
     (w.actual_duration === b.actual_duration && topSpeed(w) > topSpeed(b)) ? w : b), null);
 
-  const maxW = Math.max(2, ...weeks);
-  const weekBars = weeks.map((n) => `<div class="bar"><b>${n || ''}</b><i class="${n ? '' : 'zero'}" style="height:${(n / maxW) * 100}%"></i></div>`).join('');
-  const weekAxis = weeks.map((_, i) => `<span>${i === 7 ? 'This' : `−${7 - i}w`}</span>`).join('');
+  const goal = data.profile.workoutsPerWeek;
+  const maxW = Math.max(goal, ...weeks);
+  const weekBars = weeks.map((n, i) => `<div class="bar ${i === 7 ? 'now' : ''}"><b>${n || ''}</b><i class="${n ? '' : 'zero'}" style="height:${(n / maxW) * 100}%"></i></div>`).join('');
+  const weekAxis = weeks.map((_, i) => `<span>${i === 7 ? 'Now' : i % 2 ? `−${7 - i}w` : ''}</span>`).join('');
+  const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
 
-  const last = done.slice(-10);
-  const maxM = Math.max(10, ...last.map((w) => w.actual_duration));
-  const durBars = last.map((w) => `<div class="bar"><b>${Math.round(w.actual_duration)}</b><i style="height:${(w.actual_duration / maxM) * 100}%"></i></div>`).join('');
-  const durAxis = last.map((w) => `<span>${new Date(w.date).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' })}</span>`).join('');
+  const stat = (n, label, cls = '') => `<div class="stat ${cls}"><b>${esc(n)}</b><span>${esc(label)}</span></div>`;
+  const seg = (id, label) => `<button data-act="prog-tab" data-arg="${id}" aria-pressed="${progTab === id}">${label}</button>`;
 
-  const recov = done.slice(-8).map((w) => `<span class="rec-dot ${w.recovery_status}">${w.recovery_status}</span>`).join('');
+  const overview = done.length === 0
+    ? `<section class="card soft"><p>Your progress will show up here after your first workout. Whenever you're ready.</p></section>${medalsCard(r)}`
+    : `<section class="card">
+    <h3>Workouts per week · goal ${goal}</h3>
+    <div class="bars" role="img" aria-label="Workouts per week for the last 8 weeks: ${weeks.join(', ')}">${weekBars}</div>
+    <div class="bar-axis">${weekAxis}</div>
+  </section>
+  <section class="card pb-card"><div><h3>Personal best</h3>${best ? `<b>${Math.round(best.actual_duration)} min</b><span class="small muted">${fmtSpeed(topSpeed(best))} km/h top</span>` : '<span class="small muted">Not yet</span>'}</div>
+    <div><h3>Level</h3><b>${level} · ${esc(LEVELS[level].name)}</b><span class="small muted">Stage ${data.state.baselineStage}</span></div></section>
+  ${medalsCard(r)}
+  ${insights.length ? `<section class="card soft"><h3>What I'm learning about you</h3><ul class="why">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}`;
 
-  const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
+  const history = items.length
+    ? `<section class="card">${items.map(histItem).join('')}</section>
+  ${missed.length ? `<p class="small muted" style="text-align:center">${plural(missed.length, 'missed session')} logged. Missing sessions never erases progress.</p>` : ''}`
+    : '<section class="card soft"><p>No workouts yet.</p></section>';
 
   return `
   <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div></header>
-  ${medalsCard()}
-  <div class="tiles">
-    ${tile(done.length, done.length === 1 ? 'Workout' : 'Workouts')}
-    ${tile(mins, 'Minutes moved')}
-    ${tile(evaluateMedals(data.history, data.profile, nowIso()).totalKm, 'Kilometres')}
-    ${tile(`L${level}`, LEVELS[level].name)}
-  </div>
-  ${done.length === 0 ? `<section class="card soft"><p>Your progress will show up here after your first workout. Whenever you're ready.</p></section>` : `
-  <section class="card">
-    <h3>Consistency · workouts per week</h3>
-    <div class="bars" role="img" aria-label="Workouts per week for the last 8 weeks: ${weeks.join(', ')}">${weekBars}</div>
-    <div class="bar-axis">${weekAxis}</div>
-    <p class="small muted" style="margin-top:10px">Your aim: ${data.profile.workoutsPerWeek} per week. ${recent4} in the last 4 weeks.</p>
+  <section class="card stats">
+    ${stat(done.length, done.length === 1 ? 'workout' : 'workouts')}
+    ${stat(r.totalKm, 'km')}
+    ${stat(mins, 'minutes')}
+    ${stat(r.streak.current, 'week streak', 'hot')}
   </section>
-  <section class="card">
-    <h3>Minutes per workout · last ${last.length}</h3>
-    <div class="bars" role="img" aria-label="Minutes per workout">${durBars}</div>
-    <div class="bar-axis">${durAxis}</div>
-  </section>
-  ${best ? `<section class="card"><h3>Personal best comfortable workout</h3>
-    <div class="row between"><div><b style="font-size:22px">${Math.round(best.actual_duration)} min</b><p class="small muted">${new Date(best.date).toLocaleDateString()} · felt ${best.rating === 'too_easy' ? 'easy' : 'about right'}</p></div>
-    <span class="badge accent">${fmtSpeed(topSpeed(best))} km/h top speed</span></div></section>` : ''}
-  <section class="card"><h3>Recovery before recent workouts</h3><div class="rec-dots">${recov}</div></section>`}
-  ${insights.length ? `<section class="card soft"><h3>What I'm learning about you</h3><ul class="why">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
-  ${items.length ? `<section class="card"><h3>History</h3>${items.map(histItem).join('')}</section>` : ''}
-  ${missed.length ? `<p class="small muted" style="text-align:center">${plural(missed.length, 'missed session')} logged. Missing sessions never erases progress.</p>` : ''}`;
+  <div class="segctl" role="group" aria-label="Progress view">${seg('overview', 'Overview')}${seg('history', 'History')}</div>
+  ${progTab === 'history' ? history : overview}`;
 }
 
-// Medals entry point on the Progress tab: latest earned medals + count.
-function medalsCard() {
-  const r = evaluateMedals(data.history, data.profile, nowIso());
+// Medals entry on Progress: the latest medals you've won and the next one to chase.
+function medalsCard(r) {
   const earned = r.medals.filter((m) => m.earned).sort((a, b) => new Date(b.earnedAt) - new Date(a.earnedAt));
-  const shelf = earned.slice(0, 5).map((m) => `<span class="shelf-medal" title="${esc(m.title)}">${m.emoji}</span>`).join('')
-    || '<span class="small muted">Finish your first workout to earn one.</span>';
+  const next = r.medals.filter((m) => !m.earned && m.group !== 'special').sort((a, b) => b.progress - a.progress)[0];
+  const shelf = earned.slice(0, 4).map((m) => medalSvg(m, medalIndex(m), 40)).join('');
   return `<button class="card medals-card" data-act="tab" data-arg="medals">
-    <div class="row between"><div><h3 style="margin:0">Medals</h3><div class="small muted">${r.earnedCount} of ${r.medals.length} collected</div></div><span class="chev">${ICONS.chev}</span></div>
-    <div class="shelf">${shelf}</div></button>`;
+    <div class="row between"><div><h3 style="margin:0">Medals</h3><div class="small muted">${r.earnedCount} of ${r.medals.length} won</div></div>
+      <span class="medals-shelf">${shelf}<span class="chev">${ICONS.chev}</span></span></div>
+    ${next ? `<div class="medals-next"><span class="small"><b>Next:</b> ${esc(next.title)} · ${esc(toGo(next, r))}</span>
+      <div class="progress sm"><span style="width:${Math.round(next.progress * 100)}%"></span></div></div>` : ''}
+  </button>`;
+}
+
+const medalIndex = (m) => MEDALS.filter((x) => x.group === m.group).findIndex((x) => x.id === m.id);
+function toGo(m, r) {
+  if (m.group === 'workouts') return `${plural(m.n - r.workouts, 'workout')} to go`;
+  if (m.group === 'distance') return `${Math.max(0.1, m.n - r.totalKm).toFixed(1)} km to go`;
+  return `${plural(m.n - r.streak.current, 'week')} to go`;
 }
 
 const tile = (num, label) => `<div class="tile"><div class="tile-num">${esc(num)}</div><div class="tile-label">${esc(label)}</div></div>`;
@@ -1236,25 +1243,65 @@ function scheduleSettings() {
 function renderMedals() {
   const r = evaluateMedals(data.history, data.profile, nowIso());
   const groups = ['workouts', 'distance', 'streak', 'special'];
-  const tileFor = (m) => `
-    <div class="medal ${m.earned ? 'earned' : ''}">
-      <div class="medal-emoji" aria-hidden="true">${m.emoji}</div>
+  const tileFor = (m) => {
+    const isNew = newMedalIds.has(m.id);
+    return `<div class="medal ${m.earned ? 'earned' : ''} ${isNew ? 'is-new' : ''}">
+      ${isNew ? '<span class="new-tag">New</span>' : ''}
+      ${medalSvg(m, medalIndex(m), 54)}
       <b>${esc(m.title)}</b>
       <span class="small muted">${esc(m.desc)}</span>
       ${m.earned ? `<span class="small medal-date">${new Date(m.earnedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>`
         : m.group !== 'special' ? `<div class="progress sm"><span style="width:${Math.round(m.progress * 100)}%"></span></div>` : ''}
     </div>`;
+  };
+  const fresh = r.medals.filter((m) => newMedalIds.has(m.id));
   return `
   <button class="back" data-act="tab" data-arg="progress">‹ Progress</button>
   <header class="topbar"><div><div class="eyebrow">Trophy case</div><h1 class="title">Medals</h1>
-    <p class="subtitle">${r.earnedCount} of ${r.medals.length} collected</p></div></header>
-  <div class="tiles">
-    ${tile(r.workouts, r.workouts === 1 ? 'Workout' : 'Workouts')}
-    ${tile(r.totalKm, 'Kilometres')}
-    ${tile(r.streak.current, `Week streak (goal ${data.profile.workoutsPerWeek}/wk)`)}
-    ${tile(r.streak.best, 'Best streak')}
-  </div>
-  ${groups.map((g) => `<section class="card"><h3>${GROUP_TITLES[g]}</h3><div class="medal-grid">${r.medals.filter((m) => m.group === g).map(tileFor).join('')}</div></section>`).join('')}`;
+    <p class="subtitle">${r.earnedCount} of ${r.medals.length} won · best streak ${plural(r.streak.best, 'week')}</p></div></header>
+  ${fresh.length ? `<section class="card medal-news"><h3>Just won</h3><div class="medal-grid">${fresh.map(tileFor).join('')}</div></section>` : ''}
+  ${groups.map((g) => `<section class="card"><h3>${GROUP_TITLES[g]}</h3><div class="medal-grid">${r.medals.filter((m) => m.group === g && !(fresh.length && newMedalIds.has(m.id))).map(tileFor).join('')}</div></section>`).join('')}`;
+}
+
+// New medal: confetti over whatever is on screen, plus a banner at the top
+// that opens the medals page.
+function celebrate(list) {
+  newMedalIds = new Set(list.map((m) => m.id));
+  const layer = document.createElement('div');
+  layer.className = 'confetti';
+  const colors = ['#FF8A5B', '#1E8A6E', '#E8B931', '#5B8DEF', '#8D7AC4', '#57B596'];
+  for (let i = 0; i < 70; i++) {
+    const c = document.createElement('i');
+    c.style.left = `${Math.random() * 100}%`;
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = `${Math.random() * 0.5}s`;
+    c.style.animationDuration = `${1.8 + Math.random() * 1.4}s`;
+    c.style.setProperty('--drift', `${(Math.random() - 0.5) * 120}px`);
+    c.style.setProperty('--spin', `${(Math.random() - 0.5) * 1440}deg`);
+    if (i % 3 === 0) c.style.borderRadius = '50%';
+    layer.appendChild(c);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 4000);
+
+  document.querySelector('.medal-banner')?.remove();
+  const m = list[0];
+  const b = document.createElement('button');
+  b.className = 'medal-banner';
+  b.dataset.act = 'medal-banner';
+  b.innerHTML = `${medalSvg(m, medalIndex(m), 38)}
+    <span class="mb-text"><span class="mb-eyebrow">${list.length === 1 ? 'You won a medal!' : `You won ${list.length} medals!`}</span>
+    <b>${esc(list.map((x) => x.title).join(' · '))}</b><span class="small">Tap to see your medals</span></span>
+    <span class="chev">${ICONS.chev}</span>`;
+  document.body.appendChild(b);
+  clearTimeout(celebrate.t);
+  celebrate.t = setTimeout(() => hideBanner(), 7000);
+}
+function hideBanner() {
+  const b = document.querySelector('.medal-banner');
+  if (!b) return;
+  b.classList.add('out');
+  setTimeout(() => b.remove(), 300);
 }
 
 // ---------------------------------------------------------------- sheets
@@ -1317,13 +1364,6 @@ const sheets = {
     return `<h2>Delete all data?</h2><p class="muted">This permanently removes your profile, history, medals and schedule from this phone. Events already in your calendar stay there. Consider exporting a backup first.</p>
       <div class="sheet-actions"><button class="btn danger block" data-act="wipe">Delete everything</button>
       <button class="btn block" data-act="close">Cancel</button></div>`;
-  },
-  medal(list) {
-    return `<div class="celebrate">${list.map((m) => `<div class="medal-big">${m.emoji}</div>`).join('')}</div>
-      <h2 style="text-align:center">${list.length === 1 ? 'New medal!' : `${list.length} new medals!`}</h2>
-      ${list.map((m) => `<p style="text-align:center"><b>${esc(m.title)}</b><br><span class="muted small">${esc(m.desc)}</span></p>`).join('')}
-      <div class="sheet-actions"><button class="btn primary block" data-act="close">Nice!</button>
-      <button class="btn ghost block" data-act="tab" data-arg="medals">See all medals</button></div>`;
   },
   move(id) {
     const x = findSession(id);
@@ -1409,7 +1449,12 @@ async function shareOrDownload(file) {
 }
 
 const actions = {
-  tab(arg) { view = arg; closeSheet(); render(); window.scrollTo(0, 0); },
+  tab(arg) {
+    if (view === 'medals' && arg !== 'medals') newMedalIds = new Set();
+    view = arg; closeSheet(); render(); window.scrollTo(0, 0);
+  },
+  'medal-banner'() { hideBanner(); view = 'medals'; closeSheet(); render(); window.scrollTo(0, 0); },
+  'prog-tab'(arg) { progTab = arg; render(); },
   profile() { actions['open-settings']('profile'); },
   'open-settings'(id) {
     if (id) openSections.add(id);
