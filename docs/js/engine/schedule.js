@@ -92,6 +92,7 @@ export function planSchedule({ prefs, busy = [], external = [], sessions = [], n
 
   // 1. Move sessions that now clash with something.
   for (const s of [...future]) {
+    if (s.pinned) continue;                 // the user placed it by hand: never move it
     const others = [...past, ...future];
     if (!conflictsOf(s, busy, external, others)) continue;
     let slot = null;
@@ -120,10 +121,12 @@ export function planSchedule({ prefs, busy = [], external = [], sessions = [], n
   const weekKey = (d) => { const x = dayStart(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x.getTime(); };
   for (let w = weekKey(nowD); w < horizonEnd.getTime(); w = weekKey(addDays(new Date(w), 7))) {
     // Skipped/missed sessions still count toward the week: no catch-up sessions.
-    const inWeek = () => [...past, ...future].filter((s) => weekKey(s.start) === w);
+    // A workout the user moved to another week still counts for its original
+    // week (so no replacement appears there); extra ones they added never count.
+    const inWeek = () => [...past, ...future].filter((s) => !s.extra && (s.origWeek != null ? s.origWeek === w : weekKey(s.start) === w));
     // Trim: drop the latest future planned sessions over the weekly goal.
     while (inWeek().length > perWeek) {
-      const extra = future.filter((s) => weekKey(s.start) === w).sort((a, b) => new Date(b.start) - new Date(a.start))[0];
+      const extra = future.filter((s) => !s.pinned && weekKey(s.start) === w).sort((a, b) => new Date(b.start) - new Date(a.start))[0];
       if (!extra) break;
       future = future.filter((s) => s.id !== extra.id);
       changes.push({ type: 'removed', session: extra });
@@ -255,4 +258,29 @@ export function toICS(sessions, profile, now) {
   }
   lines.push('END:VCALENDAR');
   return lines.join('\r\n') + '\r\n';
+}
+
+// ---------------------------------------------------------------- manual edits
+
+export function weekKeyOf(d) {
+  const x = dayStart(d);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x.getTime();
+}
+
+// Move a session to any date/time the user picks. It is pinned there.
+export function moveSession(sessions, id, startIso) {
+  return sessions.map((s) => (s.id !== id ? s : {
+    ...s, start: new Date(startIso).toISOString(), moved: true, pinned: true,
+    origWeek: s.origWeek ?? weekKeyOf(s.start),
+  }));
+}
+
+// Add an extra workout on a day the user picks (does not count toward the weekly goal).
+export function addSession(sessions, startIso, minutes) {
+  const start = new Date(startIso).toISOString();
+  let id = sessionId(start);
+  while (sessions.some((s) => s.id === id)) id += 'x';
+  return [...sessions, { id, start, minutes, status: 'planned', pinned: true, extra: true }]
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
 }

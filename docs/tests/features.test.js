@@ -202,3 +202,36 @@ test('skipping a session never schedules a catch-up', () => {
   const again = planSchedule({ prefs, sessions: skipped, now: NOW, minutes: 20, perWeek: 2 });
   assert.equal(again.changes.filter((c) => c.type === 'added').length, 0);
 });
+
+describe('manual moves and extra workouts', () => {
+  const prefs = { days: [1, 3, 6], from: '18:00', to: '21:00' };
+  test('a moved workout stays exactly where the user put it, even if busy', async () => {
+    const { moveSession } = await import('../js/engine/schedule.js');
+    const first = planSchedule({ prefs, now: NOW, minutes: 25, perWeek: 2 });
+    const target = first.sessions[0];
+    const when = new Date(new Date(NOW).getTime() + 2 * 864e5); when.setHours(10, 0, 0, 0);
+    const moved = moveSession(first.sessions, target.id, when.toISOString());
+    const busy = [{ id: 'b', days: [when.getDay()], from: '09:00', to: '12:00' }];
+    const again = planSchedule({ prefs, busy, sessions: moved, now: NOW, minutes: 25, perWeek: 2 });
+    assert.equal(again.sessions.find((s) => s.id === target.id).start, when.toISOString());
+  });
+
+  test('moving a workout to another week does not create a replacement', async () => {
+    const { moveSession } = await import('../js/engine/schedule.js');
+    const first = planSchedule({ prefs, now: NOW, minutes: 25, perWeek: 2 });
+    const target = first.sessions[0];
+    const later = new Date(new Date(target.start).getTime() + 9 * 864e5);
+    const again = planSchedule({ prefs, sessions: moveSession(first.sessions, target.id, later.toISOString()), now: NOW, minutes: 25, perWeek: 2 });
+    assert.equal(again.changes.filter((c) => c.type === 'added').length, 0);
+    assert.equal(again.changes.filter((c) => c.type === 'removed').length, 0);
+  });
+
+  test('an extra workout is kept and does not push another one out', async () => {
+    const { addSession } = await import('../js/engine/schedule.js');
+    const first = planSchedule({ prefs, now: NOW, minutes: 25, perWeek: 2 });
+    const when = new Date(new Date(NOW).getTime() + 864e5); when.setHours(7, 30, 0, 0);
+    const again = planSchedule({ prefs, sessions: addSession(first.sessions, when.toISOString(), 25), now: NOW, minutes: 25, perWeek: 2 });
+    assert.equal(again.sessions.length, first.sessions.length + 1);
+    assert.equal(again.changes.length, 0);
+  });
+});

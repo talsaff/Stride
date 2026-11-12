@@ -21,7 +21,7 @@ import { FITNESS, PREFERENCE, GOALS, GENDERS, startingStage, speedFactor, maxSta
 import { evaluateMedals, newlyEarned, GROUP_TITLES } from './engine/medals.js';
 import {
   DAY_SHORT, defaultSchedule, planSchedule, nextSession, pendingMissed, markDone, findSlot, sessionEnd,
-  conflictsOf, funnyLine, eventTitle, eventDescription, toICS, hm, fmtHM,
+  conflictsOf, funnyLine, eventTitle, eventDescription, toICS, hm, fmtHM, moveSession, addSession,
 } from './engine/schedule.js';
 
 const $app = document.getElementById('app');
@@ -109,7 +109,7 @@ function render() {
   if (!full) renderTabs();
   const fn = {
     wizard: renderWizard, today: renderToday, go: renderGo, workout: renderWorkout, checkin: renderCheckin,
-    plan: renderPlan, medals: renderMedals, progress: renderProgress, settings: renderSettings,
+    plan: renderPlan, plansettings: renderPlanSettings, medals: renderMedals, progress: renderProgress, settings: renderSettings,
   }[view];
   $app.innerHTML = fn();
   if (view === 'workout') updateWorkout();
@@ -117,7 +117,7 @@ function render() {
 
 function renderTabs() {
   const tab = (id, icon, label) =>
-    `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
+    `<button data-act="tab" data-arg="${id}" ${view === id || (id === 'plan' && view === 'plansettings') ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
   // The middle tab is the raised green Start button.
   const go = `<button class="tab-go" data-act="tab" data-arg="go" aria-label="Start a workout" ${view === 'go' ? 'aria-current="page"' : ''}>
     <span class="tab-go-circle"><svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('#fff', 'transparent', '#FF8A5B')}</svg></span><span>Start</span></button>`;
@@ -1016,33 +1016,129 @@ async function syncGoogle(interactive) {
   }
 }
 
+// ---------- plan: month calendar
+
+let planMonth = null;   // Date at the 1st of the shown month
+let planSel = null;     // selected day as YYYY-MM-DD
+
+const pad2 = (n) => String(n).padStart(2, '0');
+const dayKey = (d) => { const x = new Date(d); return `${x.getFullYear()}-${pad2(x.getMonth() + 1)}-${pad2(x.getDate())}`; };
+const fromDayKey = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const timeOf = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+// Everything that happened or is planned on each day.
+function calendarDays() {
+  const map = new Map();
+  const at = (k) => { if (!map.has(k)) map.set(k, { workouts: [], missed: [], sessions: [] }); return map.get(k); };
+  for (const w of completedWorkouts(data.history)) at(dayKey(w.date)).workouts.push(w);
+  for (const m of missedSessions(data.history)) at(dayKey(m.date)).missed.push(m);
+  if (data.schedule.enabled) for (const x of data.schedule.sessions) at(dayKey(x.start)).sessions.push(x);
+  return map;
+}
+
+function dayState(info, now = new Date()) {
+  if (!info) return null;
+  if (info.workouts.length) return 'done';
+  if (info.sessions.some((x) => x.status === 'planned' && sessionEnd(x) > now)) return 'planned';
+  if (info.missed.length || info.sessions.some((x) => x.status === 'missed' || x.status === 'skipped' || (x.status === 'planned' && sessionEnd(x) <= now))) return 'missed';
+  return null;
+}
+
 function renderPlan() {
+  const now = new Date();
+  const today = dayKey(now);
+  if (!planMonth) planMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (!planSel) planSel = today;
+  const days = calendarDays();
+  const y = planMonth.getFullYear(), m = planMonth.getMonth();
+  const first = (new Date(y, m, 1).getDay() + 6) % 7;            // Monday-first grid
+  const count = new Date(y, m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first; i++) cells.push('<span></span>');
+  let done = 0, missed = 0, toGo = 0;
+  for (let d = 1; d <= count; d++) {
+    const k = `${y}-${pad2(m + 1)}-${pad2(d)}`;
+    const info = days.get(k);
+    const st = dayState(info, now);
+    if (info) {
+      done += info.workouts.length;
+      toGo += info.sessions.filter((x) => x.status === 'planned' && sessionEnd(x) > now).length;
+      if (st === 'missed') missed++;
+    }
+    cells.push(`<button class="cal-day ${k === today ? 'today' : ''} ${k === planSel ? 'sel' : ''} ${st ?? ''}" data-act="cal-day" data-arg="${k}">
+      <span>${d}</span><i></i></button>`);
+  }
+  const monthName = planMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return `
+  <header class="topbar"><div><div class="eyebrow">Your month</div><h1 class="title">Plan</h1></div>
+    <button class="icon-btn gear" data-act="tab" data-arg="plansettings" aria-label="Schedule settings">${ICONS.sliders}</button></header>
+  ${data.schedule.enabled ? '' : `<section class="card soft"><b>Scheduling is off.</b><p class="small muted" style="margin:4px 0 10px">Turn it on and Stride books your workouts into free slots.</p><button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`}
+  <section class="card cal">
+    <div class="cal-head"><button data-act="cal-month" data-arg="-1" aria-label="Previous month">‹</button><b>${esc(monthName)}</b><button data-act="cal-month" data-arg="1" aria-label="Next month">›</button></div>
+    <div class="cal-grid cal-dow">${['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((x) => `<span>${x}</span>`).join('')}</div>
+    <div class="cal-grid">${cells.join('')}</div>
+    <div class="cal-legend"><span><i class="done"></i> done</span><span><i class="planned"></i> planned</span><span><i class="missed"></i> missed</span></div>
+  </section>
+  <div class="tiles three">${tile(done, 'done')}${tile(missed, 'missed')}${tile(toGo, 'to go')}</div>
+  ${dayPanel(planSel, days.get(planSel), now)}`;
+}
+
+function dayPanel(k, info, now) {
+  const date = fromDayKey(k);
+  const isToday = k === dayKey(now);
+  const future = date >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const title = `${isToday ? 'Today · ' : ''}${date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}`;
+  const rows = [];
+  for (const w of info?.workouts ?? []) {
+    const c = classifyWorkout(w);
+    rows.push(`<div class="day-item done">${ICONS.check}<div><b>Done · ${Math.round(w.actual_duration)} min${w.distance_km ? ` · ${w.distance_km.toFixed(1)} km` : ''}</b>
+      <div class="small muted">${timeOf(w.date)} · ${{ easy: 'felt easy', appropriate: 'felt about right', hard: 'felt tough', neutral: 'short one', safety: 'stopped early' }[c]}</div></div></div>`);
+  }
+  for (const x of info?.sessions ?? []) {
+    if (x.status === 'planned' && sessionEnd(x) > now) {
+      rows.push(`<div class="day-item planned" id="sess-${x.id}">${ICONS.run}<div style="flex:1"><b>${timeOf(x.start)} · ${x.minutes} min</b>
+        <div class="small muted">${x.extra ? 'Extra workout' : 'Stride time'}${x.moved ? ' · moved' : ''}${x.googleEventId ? ' · in Google Calendar' : ''}</div>
+        <div class="row" style="gap:8px;margin-top:10px"><button class="btn sm" data-act="sheet" data-arg="move:${x.id}">Move</button><button class="btn sm ghost" data-act="sheet" data-arg="skip:${x.id}">Skip</button></div></div></div>`);
+    } else if (x.status === 'planned' && !(info?.workouts.length)) {
+      rows.push(`<div class="day-item missed">${ICONS.x}<div><b>${timeOf(x.start)} · not done</b><div class="small muted"><button class="link small" data-act="sheet" data-arg="happened:${x.id}">What happened?</button></div></div></div>`);
+    } else if (x.status === 'skipped' || x.status === 'missed') {
+      rows.push(`<div class="day-item missed">${ICONS.x}<div><b>${x.status === 'skipped' ? 'Skipped' : 'Missed'} · ${timeOf(x.start)}</b></div></div>`);
+    }
+  }
+  for (const r of info?.missed ?? []) {
+    if ((info?.sessions ?? []).some((x) => x.status === 'skipped' || x.status === 'missed')) break;
+    rows.push(`<div class="day-item missed">${ICONS.x}<div><b>Missed</b><div class="small muted">${esc(REASONS[r.reason] ?? '')}</div></div></div>`);
+  }
+  if (!rows.length) rows.push(`<p class="muted" style="margin:2px 0">Nothing planned.</p>`);
+  const canAdd = future && data.schedule.enabled;
+  return `<section class="card day-panel"><h3>${esc(title)}</h3>${rows.join('')}
+    ${canAdd ? `<button class="link" data-act="sheet" data-arg="add:${k}">${ICONS.plus} Add a workout</button>` : ''}</section>`;
+}
+
+function selectDay(iso) {
+  const d = new Date(iso);
+  planSel = dayKey(d);
+  planMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function renderPlanSettings() {
   const sch = data.schedule;
   const p = sch.prefs;
   const g = sch.google;
-  const now = new Date();
+  const back = `<button class="back" data-act="tab" data-arg="plan">‹ Plan</button>`;
   if (!sch.enabled) {
-    return `<header class="topbar"><div><div class="eyebrow">Your week</div><h1 class="title">Plan</h1></div></header>
+    return `${back}<header class="topbar"><div><div class="eyebrow">Schedule</div><h1 class="title">Settings</h1></div></header>
       <section class="card"><h2>Schedule your workouts</h2><p class="muted" style="margin:8px 0 14px">Pick your days and times. Stride books workouts into free slots, moves them when something clashes, and reminds you when it's time.</p>
       <button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`;
   }
-  const upcoming = sch.sessions.filter((s) => sessionEnd(s) > now && s.status === 'planned');
-  const ctx = scheduleCtx();
-  const list = upcoming.length ? upcoming.map((s) => {
-    const clash = conflictsOf(s, ctx.busy, ctx.external, ctx.sessions);
-    return `<div class="sess" id="sess-${s.id}"><div><b>${esc(fmtWhen(s.start))}</b><div class="small muted">${s.minutes} min${s.moved ? ' · moved' : ''}${s.googleEventId ? ' · in Google Calendar' : ''}</div>
-      ${clash ? '<span class="badge accent">Clashes with something</span>' : ''}</div>
-      <div class="row" style="gap:6px"><button class="chip" data-act="sheet" data-arg="move:${s.id}">Move</button><button class="chip" data-act="sheet" data-arg="skip:${s.id}">Skip</button></div></div>`;
-  }).join('') : '<p class="muted">Nothing planned in the next two weeks. Check your days and time window below.</p>';
-
   const day = (n) => `<button class="chip" data-act="plan-day" data-arg="${n}" aria-pressed="${p.days.includes(n)}">${DAY_SHORT[n]}</button>`;
   const per = (n) => `<button class="chip" data-act="pref" data-arg="workoutsPerWeek:${n}" aria-pressed="${data.profile.workoutsPerWeek === n}">${n}×</button>`;
   const busyList = sch.busy.length ? sch.busy.map((b) => `<div class="sess"><div><b>${esc(b.label || 'Busy')}</b><div class="small muted">${b.days.map((d) => DAY_SHORT[d]).join(', ')} · ${b.from}–${b.to}</div></div>
       <button class="icon-btn" data-act="busy-del" data-arg="${b.id}" aria-label="Remove">${ICONS.x}</button></div>`).join('') : '<p class="small muted">Add regular commitments (work, classes) so workouts never land on them.</p>';
 
   return `
-  <header class="topbar"><div><div class="eyebrow">Your week</div><h1 class="title">Plan</h1></div></header>
-  <section class="card"><h3>Coming up</h3>${list}</section>
+  ${back}
+  <header class="topbar"><div><div class="eyebrow">Schedule</div><h1 class="title">Settings</h1></div></header>
 
   <section class="card">
     <h3>Google Calendar</h3>
@@ -1177,12 +1273,27 @@ const sheets = {
       <button class="btn ghost block" data-act="tab" data-arg="medals">See all medals</button></div>`;
   },
   move(id) {
-    const s = findSession(id);
-    if (!s) return '<p>That workout is gone.</p>';
-    const slots = alternativeSlots(s);
-    return `<h2>Move workout</h2><p class="muted small">Currently ${esc(fmtWhen(s.start))}. Pick a free slot:</p>
-      <div class="sheet-actions">${slots.map((d) => `<button class="btn block" data-act="move-to" data-arg="${id}|${d.toISOString()}">${esc(fmtWhen(d.toISOString()))}</button>`).join('') || '<p class="muted">No free slots in the next week. Try widening your time window.</p>'}
+    const x = findSession(id);
+    if (!x) return '<p>That workout is gone.</p>';
+    const d = new Date(x.start);
+    return `<h2>Move workout</h2><p class="muted small">Now: ${esc(fmtWhen(x.start))}. Pick any day and time.</p>
+      <div class="pick"><label><span>Day</span><input type="date" id="mv-date" value="${dayKey(d)}" min="${dayKey(new Date())}"></label>
+      <label><span>Time</span><input type="time" id="mv-time" value="${pad2(d.getHours())}:${pad2(d.getMinutes())}" step="300"></label></div>
+      <div class="sheet-actions"><button class="btn primary block" data-act="move-save" data-arg="${id}">Move it</button>
       <button class="btn ghost block" data-act="close">Cancel</button></div>`;
+  },
+  add(k) {
+    const date = fromDayKey(k);
+    return `<h2>Add a workout</h2><p class="muted small">${esc(date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }))}. An extra one on top of your weekly plan.</p>
+      <div class="pick"><label><span>Time</span><input type="time" id="add-time" value="${data.schedule.prefs.from}" step="300"></label></div>
+      <div class="sheet-actions"><button class="btn primary block" data-act="add-save" data-arg="${k}">Add workout</button>
+      <button class="btn ghost block" data-act="close">Cancel</button></div>`;
+  },
+  happened(id) {
+    return `<h2>What happened?</h2><p class="muted small">No judgement, and no catch-up needed.</p>
+      <div class="chips" style="margin-top:14px"><button class="chip" data-act="missed-session" data-arg="${id}:done">I did it</button>
+      ${Object.entries(REASONS).map(([k, v]) => `<button class="chip" data-act="missed-session" data-arg="${id}:${k}">${esc(v)}</button>`).join('')}</div>
+      <div class="sheet-actions"><button class="btn ghost block" data-act="close">Cancel</button></div>`;
   },
   skip(id) {
     const s = findSession(id);
@@ -1342,6 +1453,7 @@ const actions = {
         toast('Logged. No catch-up needed.');
       }
     }
+    closeSheet();
     persist(); render(); pushSync();
   },
   // workout
@@ -1367,11 +1479,49 @@ const actions = {
   'go-plan'() { goShowPlan = !goShowPlan; render(); },
   // Move from Today: go to the Plan screen, highlight the workout, show the options.
   'plan-move'(id) {
+    const x = findSession(id);
+    if (x) selectDay(x.start);
     view = 'plan';
     render();
     const el = document.getElementById(`sess-${id}`);
     if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'center' }); }
     openSheet(sheets.move(id));
+  },
+  'cal-day'(k) { planSel = k; render(); document.querySelector('.day-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); },
+  'cal-month'(n) {
+    const base = planMonth ?? new Date();
+    planMonth = new Date(base.getFullYear(), base.getMonth() + Number(n), 1);
+    render();
+  },
+  'move-save'(id) {
+    const d = document.getElementById('mv-date')?.value;
+    const t = document.getElementById('mv-time')?.value;
+    if (!d || !t) return toast('Pick a day and a time.');
+    const [yy, mm, dd] = d.split('-').map(Number);
+    const [hh, mi] = t.split(':').map(Number);
+    const when = new Date(yy, mm - 1, dd, hh, mi);
+    if (when < new Date()) return toast('That time has already passed. Pick a later one.');
+    data.schedule.sessions = moveSession(data.schedule.sessions, id, when.toISOString());
+    const moved = findSession(id);
+    const clash = conflictsOf(moved, data.schedule.busy, scheduleCtx().external, data.schedule.sessions);
+    selectDay(when);
+    persist(); closeSheet(); render();
+    toast(clash ? `Moved to ${fmtWhen(moved.start)}. Heads up: that clashes with something in your schedule.` : `Moved to ${fmtWhen(moved.start)}.`, clash ? 5000 : 3000);
+    pushSync();
+    if (data.schedule.google.connected && gcal.hasValidToken()) syncGoogle(false);
+  },
+  'add-save'(k) {
+    const t = document.getElementById('add-time')?.value;
+    if (!t) return toast('Pick a time.');
+    const [hh, mi] = t.split(':').map(Number);
+    const date = fromDayKey(k);
+    const when = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hh, mi);
+    if (when < new Date()) return toast('That time has already passed. Pick a later one.');
+    data.schedule.sessions = addSession(data.schedule.sessions, when.toISOString(), plannedMinutes());
+    persist(); closeSheet(); render();
+    toast(`Extra workout added: ${fmtWhen(when.toISOString())}.`);
+    pushSync();
+    if (data.schedule.google.connected && gcal.hasValidToken()) syncGoogle(false);
   },
   discard() {
     data.activeSession = null;

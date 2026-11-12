@@ -488,3 +488,43 @@ body.go-mode .tab-go-circle { border-color: #0F4D3E; }
 @keyframes flash { 0%, 40% { background: var(--accent-soft); } 100% { background: transparent; } }
 .hero-go { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; opacity: .92; }
 .hero-go span { font-size: 22px; line-height: 1; }
+
+/* ---------- plan: month calendar ---------- */
+.gear { width: 42px; height: 42px; border-radius: 14px; }
+.gear svg { width: 20px; height: 20px; }
+.back { color: var(--primary); font-weight: 700; padding: 4px 2px 10px; font-size: 16px; }
+.cal { padding: 14px 10px; }
+.cal-head { display: flex; justify-content: space-between; align-items: center; padding: 0 6px 10px; }
+.cal-head b { font-size: 17px; }
+.cal-head button { width: 36px; height: 36px; border-radius: 50%; font-size: 24px; line-height: 1; color: var(--ink); background: var(--surface-2); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-dow span { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); padding-bottom: 4px; }
+.cal-day {
+  height: 46px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 15px; color: var(--ink); border: 2px solid transparent;
+}
+.cal-day i { width: 7px; height: 7px; border-radius: 50%; }
+.cal-day.done span, .cal-day.planned span { font-weight: 800; }
+.cal-day.done i { background: var(--primary); }
+.cal-day.planned i { background: #FF8A5B; }
+.cal-day.missed i { background: #CFC6BA; }
+.cal-day.missed span { color: var(--muted); }
+.cal-day.today { border-color: var(--ink); }
+.cal-day.sel { background: var(--primary-soft); }
+.cal-legend { display: flex; justify-content: center; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.cal-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; }
+.cal-legend i.done { background: var(--primary); }
+.cal-legend i.planned { background: #FF8A5B; }
+.cal-legend i.missed { background: #CFC6BA; }
+.tiles.three { grid-template-columns: repeat(3, 1fr); }
+.day-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.day-item:first-of-type { border-top: 0; }
+.day-item > svg { width: 22px; height: 22px; margin-top: 2px; flex: none; }
+.day-item.done > svg { color: var(--primary); }
+.day-item.planned > svg { color: #FF8A5B; }
+.day-item.missed > svg { color: var(--muted); }
+.btn.sm { min-height: 40px; padding: 0 18px; font-size: 15px; border-radius: 12px; }
+.pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.pick label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
+.pick input { width: 100%; min-height: 50px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); padding: 0 12px; font-size: 17px; font-weight: 600; color: var(--ink); }
+.pick label:only-child { grid-column: span 2; }
