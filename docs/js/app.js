@@ -109,7 +109,7 @@ function render() {
   if (!full) renderTabs();
   const fn = {
     wizard: renderWizard, today: renderToday, go: renderGo, workout: renderWorkout, checkin: renderCheckin,
-    plan: renderPlan, plansettings: renderPlanSettings, medals: renderMedals, progress: renderProgress, settings: renderSettings,
+    plan: renderPlan, medals: renderMedals, progress: renderProgress, settings: renderSettings,
   }[view];
   $app.innerHTML = fn();
   if (view === 'workout') updateWorkout();
@@ -117,7 +117,7 @@ function render() {
 
 function renderTabs() {
   const tab = (id, icon, label) =>
-    `<button data-act="tab" data-arg="${id}" ${view === id || (id === 'plan' && view === 'plansettings') ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
+    `<button data-act="tab" data-arg="${id}" ${view === id ? 'aria-current="page"' : ''}>${icon === 'mark' ? `<svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('currentColor', 'transparent', 'currentColor')}</svg>` : ICONS[icon]}<span>${label}</span></button>`;
   // The middle tab is the raised green Start button.
   const go = `<button class="tab-go" data-act="tab" data-arg="go" aria-label="Start a workout" ${view === 'go' ? 'aria-current="page"' : ''}>
     <span class="tab-go-circle"><svg viewBox="4 2 92 96" aria-hidden="true">${logoMark('#fff', 'transparent', '#FF8A5B')}</svg></span><span>Start</span></button>`;
@@ -452,7 +452,7 @@ function renderGo() {
   const r = readiness();
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   const name = data.profile.name ? `, ${esc(data.profile.name)}` : '';
-  const head = `<div class="go-top">${wordmark(26)}<span>${esc(dateStr)}</span></div>`;
+  const head = `<div class="go-top">${wordmark(26)}<span class="row" style="gap:10px">${esc(dateStr)}${gearBtn('', true)}</span></div>`;
   if (d.status !== 'ok') {
     return `<section class="go">${head}<div class="go-hello">${greeting().replace(/,.*/, '')}${name}</div>
       <div class="go-title">${esc(d.headline)}</div><p class="go-note">${esc(d.explanation[0])}</p></section>`;
@@ -793,7 +793,7 @@ function renderProgress() {
   const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
 
   return `
-  <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div></header>
+  <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div>${gearBtn()}</header>
   <div class="tiles">
     ${tile(done.length, done.length === 1 ? 'Workout' : 'Workouts')}
     ${tile(mins, 'Minutes moved')}
@@ -842,42 +842,58 @@ function histItem(r) {
 
 // ---------- settings
 
+let openSections = new Set();
+
+// A collapsible Settings section: header with a one-line summary, body when open.
+function section(id, icon, title, summary, body) {
+  const open = openSections.has(id);
+  return `<section class="card acc ${open ? 'open' : ''}" id="set-${id}">
+    <button class="acc-head" data-act="acc" data-arg="${id}" aria-expanded="${open}">
+      <span class="acc-ico">${ICONS[icon]}</span>
+      <span class="acc-text"><b>${title}</b><span class="small muted">${esc(summary)}</span></span>
+      <span class="chev">${ICONS.chev}</span></button>
+    ${open ? `<div class="acc-body">${body}</div>` : ''}</section>`;
+}
+
 function renderSettings() {
   const p = data.profile;
+  const sch = data.schedule;
   const sw = (key, label, sub) => `<div class="switch-row"><div><b>${label}</b>${sub ? `<p class="small muted">${sub}</p>` : ''}</div>
     <button class="switch" role="switch" aria-label="${esc(label)}" aria-checked="${!!p[key]}" data-act="toggle" data-arg="${key}"></button></div>`;
   const durChip = (v) => `<button class="chip" data-act="pref" data-arg="defaultMinutes:${v}" aria-pressed="${(p.defaultMinutes ?? 0) === v}">${v === 0 ? 'Full length' : `${v} min`}</button>`;
   const row = (k, v) => `<div class="kv"><span class="muted">${k}</span><b>${esc(v ?? '–')}</b></div>`;
-  return `
-  <header class="topbar"><div><div class="eyebrow">Make it yours</div><h1 class="title">Settings</h1></div></header>
-  <section class="card" id="runner-profile">
-    <div class="row between"><h3 style="margin:0">Runner profile</h3><span class="avatar sm">${esc((p.name || '?').charAt(0).toUpperCase())}</span></div>
+  const level = levelOfStage(data.state.baselineStage);
+  const profileBody = `
     <div class="kv-grid">
       ${row('Name', p.name || '–')}${row('Age', p.age)}${row('Gender', GENDERS[p.gender])}
       ${row('Height', p.heightCm ? `${p.heightCm} cm` : null)}${row('Weight', p.weightKg ? `${p.weightKg} kg` : null)}
       ${row('Fitness', FITNESS[p.fitness])}${row('Prefers', PREFERENCE[effectivePreference(p)])}${row('Goal', GOALS[p.goal])}
     </div>
     <ul class="why small" style="margin-top:10px">${profileSummary(p).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-    <button class="btn primary block" style="margin-top:12px" data-act="edit-profile">${ICONS.user} Edit runner profile</button>
-  </section>
-  <section class="card"><h3>Program level</h3>${levelOptions()}</section>
-  <section class="card">
-    <h3>Workout length cap</h3><div class="chips">${[0, 10, 15, 20, 25, 30].map(durChip).join('')}</div>
-    <p class="small muted" style="margin-top:8px">Workouts longer than this get shortened to fit.</p>
-  </section>
-  <section class="card">
-    <h3>Preferences</h3>
-    ${sw('voiceCues', 'Voice and sound cues', 'Announces each step and treadmill speed.')}
-  </section>
-  <section class="card">
-    <h3>Your data</h3>
+    <button class="btn primary block" style="margin-top:12px" data-act="edit-profile">${ICONS.user} Edit runner profile</button>`;
+  const dataBody = `
     <button class="list-btn" data-act="export"><span>Export backup</span><span class="chev">${ICONS.share}</span></button>
     <label class="list-btn" style="cursor:pointer"><span>Import backup</span><span class="chev">${ICONS.chev}</span><input type="file" id="import-file" accept="application/json,.json" class="sr-only"></label>
-    <button class="list-btn" data-act="sheet" data-arg="delete" style="color:var(--danger)"><span>Delete all data</span></button>
-  </section>
+    <button class="list-btn" data-act="sheet" data-arg="delete" style="color:var(--danger)"><span>Delete all data</span></button>`;
+  const schedSummary = sch.enabled
+    ? `${p.workoutsPerWeek}× a week · ${sch.prefs.days.map((d) => DAY_SHORT[d]).join(', ') || 'no days'} · ${sch.prefs.from}–${sch.prefs.to}`
+    : 'Off';
+  return `
+  <header class="topbar"><div><div class="eyebrow">Make it yours</div><h1 class="title">Settings</h1></div></header>
+  ${section('profile', 'user', 'Runner profile', [p.name, p.age && `${p.age}`, PREFERENCE[effectivePreference(p)], GOALS[p.goal]].filter(Boolean).join(' · '), profileBody)}
+  ${section('level', 'sliders', 'Program level', `Level ${level} · ${LEVELS[level].name}`, levelOptions())}
+  ${section('schedule', 'calendar', 'Schedule', schedSummary, `<div class="acc-cards">${scheduleSettings()}</div>`)}
+  ${section('length', 'clock', 'Workout length', p.defaultMinutes ? `Up to ${p.defaultMinutes} min` : 'Full length',
+    `<div class="chips">${[0, 10, 15, 20, 25, 30].map(durChip).join('')}</div><p class="small muted" style="margin-top:8px">Workouts longer than this get shortened to fit.</p>`)}
+  ${section('sound', 'bell', 'Voice and sound', p.voiceCues ? 'On' : 'Off', sw('voiceCues', 'Voice and sound cues', 'Announces each step and treadmill speed.'))}
+  ${section('data', 'share', 'Your data', 'Backup, import, delete', dataBody)}
   <div style="text-align:center;margin:18px 0 6px;opacity:.85">${wordmark(28)}</div>
   <p class="small muted" style="text-align:center;margin:0 20px 10px">Version ${ALGORITHM_VERSION}</p>`;
 }
+
+// ⚙︎ button for the top right of every tab.
+const gearBtn = (sectionId = '', light = false) =>
+  `<button class="icon-btn gear ${light ? 'light' : ''}" data-act="open-settings" data-arg="${sectionId}" aria-label="Settings">${ICONS.gear}</button>`;
 
 function levelOptions() {
   const cur = levelOfStage(data.state.baselineStage);
@@ -1091,7 +1107,7 @@ function renderPlan() {
   const monthName = planMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   return `
   <header class="topbar"><div><div class="eyebrow">Your month</div><h1 class="title">Plan</h1></div>
-    <button class="icon-btn gear" data-act="tab" data-arg="plansettings" aria-label="Schedule settings">${ICONS.sliders}</button></header>
+    ${gearBtn('schedule')}</header>
   ${data.schedule.enabled ? '' : `<section class="card soft"><b>Scheduling is off.</b><p class="small muted" style="margin:4px 0 10px">Turn it on and Stride books your workouts into free slots.</p><button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`}
   <section class="card cal">
     <div class="cal-head"><button data-act="cal-month" data-arg="-1" aria-label="Previous month">‹</button><b>${esc(monthName)}</b><button data-act="cal-month" data-arg="1" aria-label="Next month">›</button></div>
@@ -1154,13 +1170,12 @@ function selectDay(iso) {
   planMonth = new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-function renderPlanSettings() {
+function scheduleSettings() {
   const sch = data.schedule;
   const p = sch.prefs;
   const g = sch.google;
-  const back = `<button class="back" data-act="tab" data-arg="plan">‹ Plan</button>`;
   if (!sch.enabled) {
-    return `${back}<header class="topbar"><div><div class="eyebrow">Schedule</div><h1 class="title">Settings</h1></div></header>
+    return `
       <section class="card"><h2>Schedule your workouts</h2><p class="muted" style="margin:8px 0 14px">Pick your days and times. Stride books workouts into free slots, moves them when something clashes, and reminds you when it's time.</p>
       <button class="btn primary block" data-act="sched-on">Turn on scheduling</button></section>`;
   }
@@ -1170,8 +1185,18 @@ function renderPlanSettings() {
       <button class="icon-btn" data-act="busy-del" data-arg="${b.id}" aria-label="Remove">${ICONS.x}</button></div>`).join('') : '<p class="small muted">Add regular commitments (work, classes) so workouts never land on them.</p>';
 
   return `
-  ${back}
-  <header class="topbar"><div><div class="eyebrow">Schedule</div><h1 class="title">Settings</h1></div></header>
+  <section class="card">
+    <h3>When you can train</h3>
+    <div class="q"><span class="q-label small muted">Workouts per week</span><div class="chips">${[1, 2, 3, 4, 5].map(per).join('')}</div></div>
+    <div class="q"><span class="q-label small muted">Days</span><div class="chips">${[0, 1, 2, 3, 4, 5, 6].map(day).join('')}</div></div>
+    <div class="q" style="margin-bottom:0"><span class="q-label small muted">Time window</span>
+      <div class="row"><select class="select" data-plan="from">${timeOptions(p.from)}</select><span class="muted">to</span><select class="select" data-plan="to">${timeOptions(p.to)}</select></div></div>
+  </section>
+
+  <section class="card">
+    <div class="row between"><h3 style="margin:0">Busy times</h3><button class="chip" data-act="sheet" data-arg="busy">${ICONS.plus} Add</button></div>
+    <div style="margin-top:8px">${busyList}</div>
+  </section>
 
   <section class="card">
     <h3>Google Calendar</h3>
@@ -1191,19 +1216,6 @@ function renderPlanSettings() {
     <h3>iPhone Calendar</h3>
     <p class="small muted" style="margin-bottom:12px">Adds your upcoming workouts to the iPhone Calendar with alerts 10 minutes before and at start time. After you change the plan, add them again; open the new events and remove old ones if you see doubles.</p>
     <button class="btn block" data-act="ics">${ICONS.calendar} Add to iPhone Calendar</button>
-  </section>
-
-  <section class="card">
-    <h3>When you can train</h3>
-    <div class="q"><span class="q-label small muted">Workouts per week</span><div class="chips">${[1, 2, 3, 4, 5].map(per).join('')}</div></div>
-    <div class="q"><span class="q-label small muted">Days</span><div class="chips">${[0, 1, 2, 3, 4, 5, 6].map(day).join('')}</div></div>
-    <div class="q" style="margin-bottom:0"><span class="q-label small muted">Time window</span>
-      <div class="row"><select class="select" data-plan="from">${timeOptions(p.from)}</select><span class="muted">to</span><select class="select" data-plan="to">${timeOptions(p.to)}</select></div></div>
-  </section>
-
-  <section class="card">
-    <div class="row between"><h3 style="margin:0">Busy times</h3><button class="chip" data-act="sheet" data-arg="busy">${ICONS.plus} Add</button></div>
-    <div style="margin-top:8px">${busyList}</div>
   </section>
 
   ${pushCard()}
@@ -1227,7 +1239,7 @@ function renderMedals() {
     </div>`;
   return `
   <header class="topbar"><div><div class="eyebrow">Trophy case</div><h1 class="title">Medals</h1>
-    <p class="subtitle">${r.earnedCount} of ${r.medals.length} collected</p></div></header>
+    <p class="subtitle">${r.earnedCount} of ${r.medals.length} collected</p></div>${gearBtn()}</header>
   <div class="tiles">
     ${tile(r.workouts, r.workouts === 1 ? 'Workout' : 'Workouts')}
     ${tile(r.totalKm, 'Kilometres')}
@@ -1390,7 +1402,17 @@ async function shareOrDownload(file) {
 
 const actions = {
   tab(arg) { view = arg; closeSheet(); render(); window.scrollTo(0, 0); },
-  profile() { view = 'settings'; render(); setTimeout(() => document.getElementById('runner-profile')?.scrollIntoView({ behavior: 'smooth' }), 50); },
+  profile() { actions['open-settings']('profile'); },
+  'open-settings'(id) {
+    if (id) openSections.add(id);
+    view = 'settings';
+    render();
+    if (id) setTimeout(() => document.getElementById(`set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  },
+  acc(id) {
+    if (openSections.has(id)) openSections.delete(id); else openSections.add(id);
+    render();
+  },
   'edit-profile'() { openWizard('edit'); },
   // wizard
   'wz-next'() {

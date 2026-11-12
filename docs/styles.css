@@ -550,3 +550,22 @@ body.go-mode .active .unwell { color: #FFC2AE; }
 .day-sheet { margin-top: 8px; }
 .day-sheet .day-item:first-child { border-top: 0; }
 .sheet-actions .btn svg { width: 20px; height: 20px; }
+
+/* ---------- settings: collapsible sections ---------- */
+.acc { padding: 0; overflow: hidden; margin-bottom: 10px; }
+.acc-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; text-align: left; }
+.acc-ico { width: 38px; height: 38px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; flex: none; }
+.acc-ico svg { width: 20px; height: 20px; }
+.acc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.acc-text b { font-size: 16px; }
+.acc-text .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc .chev { color: var(--muted); transition: transform .2s ease; }
+.acc .chev svg { width: 18px; height: 18px; }
+.acc.open .chev { transform: rotate(90deg); }
+.acc-body { padding: 0 16px 16px; }
+.acc-cards .card { box-shadow: none; background: var(--surface-2); margin: 0 0 10px; }
+.acc-cards .card:last-child { margin-bottom: 0; }
+.topbar .gear { flex: none; align-self: center; }
+.gear.light { background: rgba(255,255,255,.14); color: #fff; width: 36px; height: 36px; border-radius: 12px; }
+.gear.light svg { width: 18px; height: 18px; }
+.acc-cards .chip:not([aria-pressed="true"]), .acc-cards .select { background: var(--surface); }
