@@ -771,73 +771,70 @@ function saveCheckin() {
 function renderProgress() {
   const done = completedWorkouts(data.history);
   const missed = missedSessions(data.history);
-  const weeks = weeklyCounts(data.history, new Date(), 8);
-  const mins = Math.round(totalMinutes(data.history));
-  const { insights } = personalInsights(data.history);
-  const level = levelOfStage(data.state.baselineStage);
   const r = evaluateMedals(data.history, data.profile, nowIso());
+  const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const comfortable = done.filter((w) => ['easy', 'appropriate'].includes(classifyWorkout(w)));
-  const best = comfortable.reduce((b, w) => (!b || w.actual_duration > b.actual_duration ||
-    (w.actual_duration === b.actual_duration && topSpeed(w) > topSpeed(b)) ? w : b), null);
+  if (progTab === 'history') {
+    const { insights } = personalInsights(data.history);
+    return `
+  <button class="back" data-act="prog-tab" data-arg="overview">‹ Progress</button>
+  <header class="topbar"><div><h1 class="title">History</h1>
+    <p class="subtitle">${plural(done.length, 'workout')}${missed.length ? ` · ${missed.length} missed` : ''}</p></div></header>
+  ${items.length ? `<section class="card hist-card">${items.slice(0, 100).map(histItem).join('')}</section>` : '<section class="card soft"><p>No workouts yet.</p></section>'}
+  ${insights.length ? `<section class="card soft"><h3>What I'm learning about you</h3><ul class="why">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}
+  ${missed.length ? `<p class="small muted" style="text-align:center">Missing sessions never erases progress.</p>` : ''}`;
+  }
 
+  const mins = Math.round(totalMinutes(data.history));
+  const longest = Math.round(Math.max(0, ...done.map((w) => w.actual_duration)));
   const goal = data.profile.workoutsPerWeek;
-  const maxW = Math.max(goal, ...weeks);
-  const weekBars = weeks.map((n, i) => `<div class="bar ${i === 7 ? 'now' : ''}"><b>${n || ''}</b><i class="${n ? '' : 'zero'}" style="height:${(n / maxW) * 100}%"></i></div>`).join('');
-  const weekAxis = weeks.map((_, i) => `<span>${i === 7 ? 'Now' : i % 2 ? `−${7 - i}w` : ''}</span>`).join('');
-  const items = [...data.history].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
-
-  const stat = (n, label, cls = '') => `<div class="stat ${cls}"><b>${esc(n)}</b><span>${esc(label)}</span></div>`;
-  const seg = (id, label) => `<button data-act="prog-tab" data-arg="${id}" aria-pressed="${progTab === id}">${label}</button>`;
-
-  const overview = done.length === 0
-    ? `<section class="card soft"><p>Your progress will show up here after your first workout. Whenever you're ready.</p></section>${medalsCard(r)}`
-    : `<section class="card">
-    <h3>Workouts per week · goal ${goal}</h3>
-    <div class="bars" role="img" aria-label="Workouts per week for the last 8 weeks: ${weeks.join(', ')}">${weekBars}</div>
-    <div class="bar-axis">${weekAxis}</div>
-  </section>
-  <section class="card pb-card"><div><h3>Personal best</h3>${best ? `<b>${Math.round(best.actual_duration)} min</b><span class="small muted">${fmtSpeed(topSpeed(best))} km/h top</span>` : '<span class="small muted">Not yet</span>'}</div>
-    <div><h3>Level</h3><b>${level} · ${esc(LEVELS[level].name)}</b><span class="small muted">Stage ${data.state.baselineStage}</span></div></section>
-  ${medalsCard(r)}
-  ${insights.length ? `<section class="card soft"><h3>What I'm learning about you</h3><ul class="why">${insights.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>` : ''}`;
-
-  const history = items.length
-    ? `<section class="card">${items.map(histItem).join('')}</section>
-  ${missed.length ? `<p class="small muted" style="text-align:center">${plural(missed.length, 'missed session')} logged. Missing sessions never erases progress.</p>` : ''}`
-    : '<section class="card soft"><p>No workouts yet.</p></section>';
+  const weeks = weeklyCounts(data.history, new Date(), 8);
+  const max = Math.max(goal, ...weeks);
+  const ago = (i) => { const d = new Date(); d.setDate(d.getDate() - 7 * (7 - i)); return d; };
+  const axis = weeks.map((_, i) => {
+    if (i === 7) return 'Now';
+    const d = ago(i), prev = ago(i - 1);
+    return i === 0 || d.getMonth() !== prev.getMonth() ? d.toLocaleDateString(undefined, { month: 'short' }) : '';
+  });
+  const stat = (icon, cls, n, unit, label) => `<div class="pstat"><span class="pstat-ico ${cls}">${ICONS[icon]}</span>
+    <div><b>${esc(n)}${unit ? `<small> ${unit}</small>` : ''}</b><span>${label}</span></div></div>`;
 
   return `
-  <header class="topbar"><div><div class="eyebrow">Your journey</div><h1 class="title">Progress</h1></div></header>
-  <section class="card stats">
-    ${stat(done.length, done.length === 1 ? 'workout' : 'workouts')}
-    ${stat(r.totalKm, 'km')}
-    ${stat(mins, 'minutes')}
-    ${stat(r.streak.current, 'week streak', 'hot')}
+  <header class="topbar"><div><h1 class="title">Progress</h1></div></header>
+  <section class="card pstats">
+    ${stat('run', 'c-green', done.length, '', done.length === 1 ? 'workout' : 'workouts')}
+    ${stat('route', 'c-coral', r.totalKm, 'km', 'distance')}
+    ${stat('clock', 'c-blue', mins, 'min', 'time moving')}
+    ${stat('bolt', 'c-purple', longest, 'min', 'longest')}
   </section>
-  <div class="segctl" role="group" aria-label="Progress view">${seg('overview', 'Overview')}${seg('history', 'History')}</div>
-  ${progTab === 'history' ? history : overview}`;
+  ${medalsCard(r)}
+  <section class="card week-card">
+    <div class="row between"><b>This week</b><span><b>${weeks[7]}</b> of ${goal} done</span></div>
+    <div class="wbars" role="img" aria-label="Workouts per week for the last 8 weeks: ${weeks.join(', ')}">
+      <div class="wgoal" style="bottom:${(goal / max) * 100}%"></div>
+      ${weeks.map((n, i) => `<i class="${n ? (i === 7 ? 'now' : 'on') : ''}" style="height:${n ? (n / max) * 100 : 0}%"></i>`).join('')}
+    </div>
+    <div class="waxis">${axis.map((l) => `<span>${l}</span>`).join('')}</div>
+  </section>
+  <section class="card hist-card">
+    <div class="row between"><b class="card-title">History</b>${items.length > 2 ? '<button class="link-btn" data-act="prog-tab" data-arg="history">See all ›</button>' : ''}</div>
+    ${items.length ? items.slice(0, 2).map(histItem).join('') : '<p class="small muted" style="margin-top:8px">Your workouts will show up here.</p>'}
+  </section>`;
 }
 
-// Medals entry on Progress: the latest medals you've won and the next one to chase.
+// Medals entry on Progress: your latest medal (or the first one to win).
 function medalsCard(r) {
   const earned = r.medals.filter((m) => m.earned).sort((a, b) => new Date(b.earnedAt) - new Date(a.earnedAt));
-  const next = r.medals.filter((m) => !m.earned && m.group !== 'special').sort((a, b) => b.progress - a.progress)[0];
-  const shelf = earned.slice(0, 4).map((m) => medalSvg(m, medalIndex(m), 40)).join('');
+  const m = earned[0] ?? r.medals[0];
   return `<button class="card medals-card" data-act="tab" data-arg="medals">
-    <div class="row between"><div><h3 style="margin:0">Medals</h3><div class="small muted">${r.earnedCount} of ${r.medals.length} won</div></div>
-      <span class="medals-shelf">${shelf}<span class="chev">${ICONS.chev}</span></span></div>
-    ${next ? `<div class="medals-next"><span class="small"><b>Next:</b> ${esc(next.title)} · ${esc(toGo(next, r))}</span>
-      <div class="progress sm"><span style="width:${Math.round(next.progress * 100)}%"></span></div></div>` : ''}
+    <span class="${earned.length ? '' : 'medal-faded'}">${medalSvg(m, medalIndex(m), 50)}</span>
+    <span class="mc-text"><span class="mc-eyebrow">${earned.length ? 'Latest medal' : 'Your first medal'}</span>
+      <b>${esc(m.title)}</b><span class="small muted">${earned.length ? `${r.earnedCount} of ${r.medals.length} won · see all` : esc(m.desc)}</span></span>
+    <span class="chev">${ICONS.chev}</span>
   </button>`;
 }
 
 const medalIndex = (m) => MEDALS.filter((x) => x.group === m.group).findIndex((x) => x.id === m.id);
-function toGo(m, r) {
-  if (m.group === 'workouts') return `${plural(m.n - r.workouts, 'workout')} to go`;
-  if (m.group === 'distance') return `${Math.max(0.1, m.n - r.totalKm).toFixed(1)} km to go`;
-  return `${plural(m.n - r.streak.current, 'week')} to go`;
-}
 
 const tile = (num, label) => `<div class="tile"><div class="tile-num">${esc(num)}</div><div class="tile-label">${esc(label)}</div></div>`;
 const topSpeed = (w) => Math.max(0, ...(w.actual_speed_by_interval ?? []).map((x) => x.speed));
@@ -845,11 +842,11 @@ const topSpeed = (w) => Math.max(0, ...(w.actual_speed_by_interval ?? []).map((x
 function histItem(r) {
   const date = new Date(r.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   if (r.kind === 'missed') {
-    return `<div class="hist-item"><div class="row between"><span class="muted">${date} · missed</span><span class="small muted">${esc(REASONS[r.reason] ?? '')}</span></div></div>`;
+    return `<div class="hist-item"><div class="hist-row"><span><b class="muted">${date}</b><span class="small muted">Missed${REASONS[r.reason] ? ` · ${esc(REASONS[r.reason])}` : ''}</span></span></div></div>`;
   }
   const c = classifyWorkout(r);
   const label = { easy: 'Felt easy', appropriate: 'About right', hard: 'Tough one', neutral: 'Short one', safety: 'Stopped early' }[c];
-  return `<details class="hist-item"><summary><span><b>${date}</b> · ${Math.round(r.actual_duration)} min${r.distance_km ? ` · ${r.distance_km.toFixed(1)} km` : ''}</span><span class="badge ${c === 'hard' ? 'accent' : ''}">${label}</span></summary>
+  return `<details class="hist-item"><summary class="hist-row"><span><b>${date}</b><span class="small muted">${Math.round(r.actual_duration)} min${r.distance_km ? ` · ${r.distance_km.toFixed(1)} km` : ''}</span></span><span class="tag t-${c}">${label}</span></summary>
     <div class="hist-detail">
       <p>Level ${r.baseline_program_level} · effort ${r.perceived_exertion ?? '–'}/10 · talk test: ${esc(r.talk_test_result ?? '–')} · felt ${esc(r.post_workout_feeling ?? '–')}</p>
       ${r.reason_for_shortening_or_skipping ? `<p>Ended early: ${esc(REASONS[r.reason_for_shortening_or_skipping])}</p>` : ''}
@@ -1450,11 +1447,12 @@ async function shareOrDownload(file) {
 
 const actions = {
   tab(arg) {
+    if (arg === 'progress') progTab = 'overview';
     if (view === 'medals' && arg !== 'medals') newMedalIds = new Set();
     view = arg; closeSheet(); render(); window.scrollTo(0, 0);
   },
   'medal-banner'() { hideBanner(); view = 'medals'; closeSheet(); render(); window.scrollTo(0, 0); },
-  'prog-tab'(arg) { progTab = arg; render(); },
+  'prog-tab'(arg) { progTab = arg; render(); window.scrollTo(0, 0); },
   profile() { actions['open-settings']('profile'); },
   'open-settings'(id) {
     if (id) openSections.add(id);
