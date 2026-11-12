@@ -463,7 +463,8 @@ function renderGo() {
   const fastSeg = w.segments.find((x) => x.type === 'work' || x.type === 'run');
   const fastText = w.runMinutes ? `${w.runMinutes} min running at ${fmtSpeed(fastSeg.speed)}`
     : w.fastMinutes ? `${w.fastMinutes} min fast at ${fmtSpeed(fastSeg.speed)}` : `easy, up to ${fmtSpeed(w.topSpeed)}`;
-  const askRecovery = !r.recoveryAnswered && completedWorkouts(data.history).length > 0;
+  const askRecovery = completedWorkouts(data.history).length > 0;
+  const rec = (val, label) => `<button data-act="recovery" data-arg="${val}" aria-pressed="${!!r.recoveryAnswered && r.recovery === val}">${label}</button>`;
   const round = (act, icon, label, on) => `<button class="go-opt ${on ? 'on' : ''}" data-act="${act}" aria-pressed="${on}"><span>${ICONS[icon]}</span>${label}</button>`;
   return `
   <section class="go">
@@ -471,7 +472,7 @@ function renderGo() {
     <div class="go-hello">${greeting().replace(/,.*/, '')}${name}</div>
     <div class="go-title">${d.mode === 'advanced' ? 'Advanced: let\'s run' : d.mode === 'easy' ? 'Easy day today' : 'Your workout is ready'}</div>
     ${askRecovery ? `<div class="go-ask"><span>Recovered from last time?</span><div>
-      <button data-act="recovery" data-arg="poor">Still tired</button><button data-act="recovery" data-arg="normal">Okay</button><button data-act="recovery" data-arg="good">Fresh</button></div></div>` : ''}
+      ${rec('poor', 'Still tired')}${rec('normal', 'Okay')}${rec('good', 'Fresh')}</div></div>` : ''}
     <div class="go-ring"><button class="go-btn" data-act="start" aria-label="Start workout">
       ${ICONS.play}<b>START</b><span>${w.totalMinutes} min · ${w.distanceKm.toFixed(1)} km</span></button></div>
     <button class="go-planbtn" data-act="go-plan" aria-expanded="${goShowPlan}" aria-label="Show the full plan">
@@ -1282,6 +1283,11 @@ const actions = {
   'wz-finish'(arg) { finishWizard(arg); },
   // today
   recovery(arg) {
+    const r = readiness();
+    if (r.recoveryAnswered && r.recovery === arg) {      // tap the chosen answer again to clear it
+      setReadiness({ recovery: 'normal', recoveryAnswered: false });
+      return render();
+    }
     setReadiness({ recovery: arg, recoveryAnswered: true });
     render();
     toast(arg === 'poor'

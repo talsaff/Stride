@@ -481,3 +481,4 @@ body.go-mode .tab-go-circle { border-color: #0F4D3E; }
 .go-plan .seg-meta, .go-plan .seg-meta b { color: #fff; }
 .go-planbtn { display: block; width: 100%; color: #fff; padding: 0; }
 .go-plan { margin: 12px 0 0; }
+.go-ask button[aria-pressed="true"] { background: #fff; color: #146B55; }
